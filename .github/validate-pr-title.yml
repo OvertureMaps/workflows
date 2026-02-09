@@ -1,0 +1,104 @@
+---
+# Reusable workflow to validate PR titles against Overture's formatting standards.
+#
+# This workflow enforces the [TYPE] bracket format for PR titles and provides
+# helpful feedback comments when validation fails.
+#
+# Required format: [TYPE] Description (Fixes #issue)
+# Optional scope:  [TYPE](scope) Description (Fixes #issue)
+# Breaking change: [BREAKING][TYPE] Description (Fixes #issue)
+#
+# Usage: Reference this workflow from any repo in the OvertureMaps organization.
+#
+# Example (.github/workflows/pr-validation.yml):
+#   name: PR Title Validation
+#   on:
+#     pull_request_target:
+#       types: [opened, reopened, edited, synchronize]
+#   jobs:
+#     validate-title:
+#       uses: OvertureMaps/workflows/.github/workflows/validate-pr-title.yml@main
+#
+name: Validate PR Title
+
+on:
+  workflow_call:
+    inputs:
+  pull_request_target:
+    types:
+      - opened
+      - reopened
+      - edited
+      - synchronize
+
+jobs:
+  validate:
+    name: Validate PR Title
+    runs-on: ubuntu-slim
+    permissions:
+      pull-requests: write
+      issues: write
+    steps:
+      - uses: amannn/action-semantic-pull-request@v6
+        id: lint_pr_title
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          # Match Overture's [TYPE] bracket format:
+          #   [BUG] Fix something (Fixes #123)
+          #   [REFACTOR](schema) Consolidate logic (Fixes #890)
+          #   [BREAKING][FEATURE] Change API response format (Closes #123)
+          headerPattern: '^\[(?:BREAKING\]\[)?(\w+)\](?:\(([^)]+)\))?\s(.+)$'
+          headerPatternCorrespondence: type, scope, subject
+          requiredScope: false
+          # Allowed types, matching the Issue/PR types defined in github-usage.md
+          types: |
+            BUG
+            FEATURE
+            ENHANCEMENT
+            DOCS
+            REFACTOR
+            TEST
+            CHORE
+            PERFORMANCE
+            SECURITY
+            INVESTIGATION
+
+          # Validate single-commit PRs too, since GitHub may suggest the commit
+          # message instead of the PR title when squash-merging.
+          validateSingleCommit: true
+          validateSingleCommitMatchesPrTitle: true
+
+          # Allow [WIP] prefix for draft work on repos without draft PR support.
+          wip: true
+
+      - name: Post validation failure comment
+        if: ${{ failure() && steps.lint_pr_title.outputs.error_message }}
+        uses: marocchino/sticky-pull-request-comment@v2
+        with:
+          header: pr-title-lint-error
+          message: |
+            ## ❌ PR Title Validation Failed
+
+            **Error:** ${{ steps.lint_pr_title.outputs.error_message }}
+
+            ---
+
+            **Required format:** `[TYPE] Brief description (Fixes #issue-number)`
+
+            **Valid types:** `BUG`, `FEATURE`, `ENHANCEMENT`, `DOCS`, `REFACTOR`, `TEST`, `CHORE`, `PERFORMANCE`, `SECURITY`, `INVESTIGATION`
+
+            **Examples:**
+            - `[BUG] Fix null pointer exception in geometry validator (Fixes #456)`
+            - `[FEATURE] Add ODbL license attribution support (Closes #789)`
+            - `[REFACTOR](schema) Consolidate validation logic (Fixes #890)`
+            - `[BREAKING][FEATURE] Change API response format (Closes #123)`
+
+            See the [GitHub Usage Guidelines](https://github.com/OvertureMaps/operating-procedures/blob/main/development/github-usage.md) for details.
+
+      - name: Delete comment on success
+        if: ${{ success() }}
+        uses: marocchino/sticky-pull-request-comment@v2
+        with:
+          header: pr-title-lint-error
+          delete: true
