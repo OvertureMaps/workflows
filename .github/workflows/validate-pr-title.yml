@@ -30,6 +30,10 @@ on:
       - edited
       - synchronize
 
+permissions:
+  pull-requests: write
+  issues: write
+
 jobs:
   validate:
     name: Validate PR Title
