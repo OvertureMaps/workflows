@@ -23,7 +23,6 @@ name: Validate PR Title
 
 on:
   workflow_call:
-    inputs:
   pull_request:
     types:
       - opened
