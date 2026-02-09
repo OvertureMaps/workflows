@@ -24,7 +24,7 @@ name: Validate PR Title
 on:
   workflow_call:
     inputs:
-  pull_request_target:
+  pull_request:
     types:
       - opened
       - reopened
@@ -76,7 +76,7 @@ jobs:
         if: ${{ failure() && steps.lint_pr_title.outputs.error_message }}
         uses: marocchino/sticky-pull-request-comment@v2
         with:
-          header: pr-title-lint-error
+          header: pr-title-validation-error
           message: |
             ## ❌ PR Title Validation Failed
 
@@ -100,5 +100,5 @@ jobs:
         if: ${{ success() }}
         uses: marocchino/sticky-pull-request-comment@v2
         with:
-          header: pr-title-lint-error
+          header: pr-title-validation-error
           delete: true
