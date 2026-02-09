@@ -33,14 +33,12 @@ on:
 permissions:
   pull-requests: write
   issues: write
+  statuses: write
 
 jobs:
   validate:
     name: Validate PR Title
     runs-on: ubuntu-slim
-    permissions:
-      pull-requests: write
-      issues: write
     steps:
       - uses: amannn/action-semantic-pull-request@v6
         id: lint_pr_title
@@ -53,7 +51,7 @@ jobs:
           #   [BREAKING][FEATURE] Change API response format (Closes #123)
           headerPattern: '^\[(?:BREAKING\]\[)?(\w+)\](?:\(([^)]+)\))?\s(.+)$'
           headerPatternCorrespondence: type, scope, subject
-          requiredScope: false
+          requireScope: false
           # Allowed types, matching the Issue/PR types defined in github-usage.md
           types: |
             BUG
