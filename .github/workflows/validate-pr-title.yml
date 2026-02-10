@@ -73,6 +73,11 @@ jobs:
           # Allow [WIP] prefix for draft work on repos without draft PR support.
           wip: true
 
+          # Allow opt-out via labels, since some repos may have automated PRs that don't follow the new format.
+          ignoreLabels: |
+            bot
+            ignore-semantic-pull-request
+
       - name: Post validation failure comment
         if: ${{ failure() && steps.lint_pr_title.outputs.error_message }}
         uses: marocchino/sticky-pull-request-comment@v2
