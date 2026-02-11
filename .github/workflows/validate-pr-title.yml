@@ -65,10 +65,6 @@ jobs:
             SECURITY
             INVESTIGATION
 
-          # Validate single-commit PRs too, since GitHub may suggest the commit
-          # message instead of the PR title when squash-merging.
-          validateSingleCommit: true
-
           # Allow [WIP] prefix for draft work on repos without draft PR support.
           wip: true
 
