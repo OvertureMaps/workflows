@@ -82,16 +82,6 @@ jobs:
       # ... additional steps in the same job
 ```
 
-### Use the composite action within the workflows repo
-
-When referencing the action from a workflow in this same repository, use a
-relative path without a checkout step:
-
-```yaml
-steps:
-  - uses: ./.github/actions/check-linked-issue
-```
-
 ## Reference
 
 ### Permissions
