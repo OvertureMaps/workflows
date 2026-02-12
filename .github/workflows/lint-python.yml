@@ -1,0 +1,60 @@
+---
+# Reusable workflow to lint Python code with the Black formatter using reviewdog.
+#
+# Runs the Black formatter in check mode and posts inline PR annotations via
+# reviewdog, so reviewers see formatting issues directly in the diff.
+#
+# Can be extended for other linters or formatters as needed.
+#
+# Usage: Reference this workflow from any repo in the OvertureMaps organization.
+#
+# Example (.github/workflows/lint-python.yml):
+#   name: Lint Python
+#   on:
+#     pull_request:
+#       types: [opened, reopened, synchronize]
+#   jobs:
+#     python-lint:
+#       uses: OvertureMaps/workflows/.github/workflows/lint-python.yml@main
+#
+name: Lint Python
+
+on:
+  workflow_call:
+    inputs:
+      black_version:
+        description: "Black formatter version to install"
+        required: false
+        type: string
+        default: "25.12.0"
+      level:
+        description: "Reviewdog report level [info, warning, error]"
+        required: false
+        type: string
+        default: "error"
+  pull_request:
+    types:
+      - opened
+      - reopened
+      - synchronize
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  black:
+    runs-on: ubuntu-slim
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Install Black
+        run: pip install black=="${{ inputs.black_version || '25.12.0' }}"
+
+      - uses: reviewdog/action-black@644053a260402bc4278a865906107bd8aef7fae8 # v3.22.4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          reporter: github-pr-check
+          level: ${{ inputs.level || 'error' }}
+          filter_mode: added
+          fail_on_error: true
