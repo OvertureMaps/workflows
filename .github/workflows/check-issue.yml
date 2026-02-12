@@ -1,0 +1,47 @@
+---
+# Reusable workflow to enforce that PRs have a linked GitHub issue.
+#
+# Uses the check-linked-issue composite action which queries GraphQL
+# closingIssuesReferences to detect linked issues, covering:
+#   - Body keywords: Fixes #123, Closes #456, Resolves owner/repo#789
+#   - Issues manually linked via the GitHub UI
+#
+# Usage: Reference this workflow from any repo in the OvertureMaps organization.
+#
+# Example (.github/workflows/check-issue.yml):
+#   name: Check Linked Issue
+#   on:
+#     pull_request:
+#       types: [opened, edited, synchronize]
+#   jobs:
+#     check-issue:
+#       uses: OvertureMaps/workflows/.github/workflows/check-issue.yml@main
+#
+name: Check Linked Issue
+
+on:
+  workflow_call:
+  pull_request:
+    types:
+      - opened
+      - edited
+      - synchronize
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  check-linked-issue:
+    name: Check Linked Issue
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout workflows repo
+        uses: actions/checkout@v4
+        with:
+          repository: OvertureMaps/workflows
+          sparse-checkout: .github/actions/check-linked-issue
+          path: .workflows
+
+      - name: Check for linked issue
+        uses: ./.workflows/.github/actions/check-linked-issue
