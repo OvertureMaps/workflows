@@ -32,11 +32,6 @@ on:
         required: false
         type: string
         default: "error"
-  pull_request:
-    types:
-      - opened
-      - reopened
-      - synchronize
 
 permissions:
   contents: read

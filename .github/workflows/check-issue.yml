@@ -29,12 +29,13 @@ on:
 
 permissions:
   contents: read
+  issues: read
   pull-requests: read
 
 jobs:
   check-linked-issue:
     name: Check Linked Issue
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-slim
     steps:
       - name: Checkout workflows repo
         uses: actions/checkout@v4

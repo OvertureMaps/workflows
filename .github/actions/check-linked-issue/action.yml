@@ -5,6 +5,12 @@ description: >
   closingIssuesReferences. Covers 'Fixes #123', 'Closes owner/repo#456',
   and issues linked manually through the GitHub UI.
 
+inputs:
+  minimumLinkedIssues:
+    description: Minimum number of linked issues required
+    required: false
+    default: 1
+
 runs:
   using: composite
   steps:
@@ -14,6 +20,7 @@ runs:
         script: |
           const prNumber = context.payload.pull_request.number;
           const { owner, repo } = context.repo;
+          const minimumLinkedIssues = parseInt(core.getInput('minimumLinkedIssues')) || 1;
 
           const query = `
             query($owner: String!, $repo: String!, $number: Int!) {
@@ -41,15 +48,18 @@ runs:
           const issues =
             result.repository.pullRequest.closingIssuesReferences.nodes;
 
-          if (!issues || issues.length === 0) {
+          core.debug(`${JSON.stringify(result, null, 2)}`);
+
+          if (!issues || issues.length < minimumLinkedIssues) {
             core.setFailed(
-              "This PR does not reference any linked issues. " +
+              `❌ This PR does not reference enough linked issues (found ${issues.length}, required ${minimumLinkedIssues})!\n` +
               "Please link an issue using 'Fixes #123', " +
               "'Closes OvertureMaps/other-repo#123', or the GitHub UI " +
-              "(https://docs.github.com/en/issues/tracking-your-work-with-issues/using-issues/linking-a-pull-request-to-an-issue)"
+              "(https://docs.github.com/en/issues/tracking-your-work-with-issues/using-issues/linking-a-pull-request-to-an-issue)\n" +
+              "After adding a linked issue, you may need to manually re-run this check from the Checks tab to update the status."
             );
           } else {
-            core.info("Linked issues found:");
+            core.info(`✅ ${issues.length} linked issues found out of ${minimumLinkedIssues} required:`);
             issues.forEach(issue => {
               core.info(`  #${issue.number} - ${issue.title} (${issue.state}) ${issue.url}`);
             });
