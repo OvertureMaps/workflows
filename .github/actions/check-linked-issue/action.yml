@@ -40,7 +40,7 @@ runs:
 
           const issues =
             result.repository.pullRequest.closingIssuesReferences.nodes;
-          core.info(`GraphQL query returned ${issues.length} linked issues.`);
+          core.info(`${JSON.stringify(result, null, 2)}`);
 
           if (!issues || issues.length === 0) {
             core.setFailed(
