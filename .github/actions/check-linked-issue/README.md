@@ -10,7 +10,7 @@ This action queries the GitHub GraphQL API for `closingIssuesReferences` on a
 pull request. It detects issues linked by:
 
 - Body keywords: `Fixes #123`, `Closes #456`, `Resolves owner/repo#789`
-- Manual linking via the GitHub UI sidebar
+- Manual linking via the GitHub UI
 
 If no linked issues are found, the step fails with a message guiding the author
 to link one.
@@ -78,6 +78,8 @@ jobs:
 
       - name: Check for linked issue
         uses: ./.workflows/.github/actions/check-linked-issue
+        with:
+          minimumLinkedIssues: 2  # Require at least 2 linked issues (optional, default is 1)
 
       # ... additional steps in the same job
 ```
@@ -91,16 +93,19 @@ Requires the default `GITHUB_TOKEN` with:
 ```yaml
 permissions:
   contents: read
+  issues: read
   pull-requests: read
 ```
 
-For private repos, these permissions allow the token to read PR metadata and
-query linked issues. Cross-repo issue detection is limited to public repos and
-repos within the same organization that the token has access to.
-
 ### Inputs
 
-This action has no inputs.
+- `minimumLinkedIssues` (optional): Minimum number of linked issues required for the PR. Default is `1`. Set this input to require more than one linked issue:
+
+```yaml
+with:
+  minimumLinkedIssues: 2
+```
+
 
 ### Outputs
 
