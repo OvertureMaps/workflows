@@ -46,9 +46,9 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           # Match Overture's [TYPE] bracket format:
-          #   [BUG] Fix something (Fixes #123)
-          #   [REFACTOR](schema) Consolidate logic (Fixes #890)
-          #   [BREAKING][FEATURE] Change API response format (Closes #123)
+          #   [BUG] Fix something
+          #   [REFACTOR](schema) Consolidate logic
+          #   [BREAKING][FEATURE] Change API response format
           headerPattern: '^\[(?:BREAKING\]\[)?(\w+)\](?:\(([^)]+)\))?\s(.+)$'
           headerPatternCorrespondence: type, scope, subject
           requireScope: false
@@ -86,8 +86,8 @@ jobs:
             ---
 
             **Examples:**
-            - `[BUG] Fix null pointer exception in geometry validator (Fixes #456)`
-            - `[REFACTOR](schema) Consolidate validation logic (Fixes #890)`
+            - `[BUG] Fix null pointer exception in geometry validator`
+            - `[REFACTOR](schema) Consolidate validation logic`
 
             See the [Overture Maps Foundation GitHub usage guidelines](https://github.com/OvertureMaps/operating-procedures/blob/main/development/github-usage.md) for full documentation.
 
