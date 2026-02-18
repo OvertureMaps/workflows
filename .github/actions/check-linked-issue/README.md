@@ -20,7 +20,7 @@ to link one.
 | Approach | Body keywords | UI-linked issues | Cross-repo refs | Format-proof |
 |----------|:---:|:---:|:---:|:---:|
 | Regex on PR body | ✅ | ❌ | Fragile | ❌ |
-| `closingIssuesReferences` | ✅ | ✅ | ✅ | ✅ |
+| `closingIssuesReferences` | ✅ | ✅ | ❌ | ✅ |
 
 The GraphQL approach reflects GitHub's actual internal linkage rather than
 parsing text, making it reliable across formatting styles and linking methods.
