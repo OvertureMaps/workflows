@@ -20,7 +20,7 @@ to link one.
 | Approach | Body keywords | UI-linked issues | Cross-repo refs | Format-proof |
 |----------|:---:|:---:|:---:|:---:|
 | Regex on PR body | ✅ | ❌ | Fragile | ❌ |
-| `closingIssuesReferences` | ✅ | ✅ | ❌ | ✅ |
+| `closingIssuesReferences` | ✅ | ✅ | ✅ | ✅ |
 
 The GraphQL approach reflects GitHub's actual internal linkage rather than
 parsing text, making it reliable across formatting styles and linking methods.
@@ -43,7 +43,15 @@ on:
 jobs:
   check-issue:
     uses: OvertureMaps/workflows/.github/workflows/check-issue.yml@main
+    secrets:
+      CHECK_LINKED_ISSUE_APP_PRIVATE_KEY: ${{ secrets.CHECK_LINKED_ISSUE_APP_PEM }}
 ```
+
+The `CHECK_LINKED_ISSUE_APP_PEM` secret must be set on the calling repository
+(or inherited from the organization). It contains the private key for the
+[overture-check-linked-issue](https://github.com/organizations/OvertureMaps/settings/apps/overture-check-linked-issue)
+GitHub App, which is used to generate a token for cross-repo GraphQL reads.
+Include the full PEM contents including the trailing newline.
 
 No checkout step is needed — GitHub resolves the reusable workflow and its
 actions automatically.
@@ -79,6 +87,7 @@ jobs:
       - name: Check for linked issue
         uses: ./.workflows/.github/actions/check-linked-issue
         with:
+          privateKey: ${{ secrets.CHECK_LINKED_ISSUE_APP_PEM }}
           minimumLinkedIssues: 2  # Require at least 2 linked issues (optional, default is 1)
 
       # ... additional steps in the same job
@@ -99,10 +108,15 @@ permissions:
 
 ### Inputs
 
+- `privateKey` (**required**): Private key for the `overture-check-linked-issue` GitHub App, used to generate an installation token for cross-repo GraphQL reads. Pass `${{ secrets.CHECK_LINKED_ISSUE_APP_PEM }}`. The value must include the full PEM block with a trailing newline.
+
+- `appId` (optional): GitHub App ID. Defaults to `2932845` (the [Overture Check Linked Issues app](https://github.com/organizations/OvertureMaps/settings/apps/overture-check-linked-issue)) and does not normally need to be overridden.
+
 - `minimumLinkedIssues` (optional): Minimum number of linked issues required for the PR. Default is `1`. Set this input to require more than one linked issue:
 
 ```yaml
 with:
+  privateKey: ${{ secrets.CHECK_LINKED_ISSUE_APP_PEM }}
   minimumLinkedIssues: 2
 ```
 

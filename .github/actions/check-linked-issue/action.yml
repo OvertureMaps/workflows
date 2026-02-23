@@ -75,9 +75,7 @@ runs:
               "Please link an issue from this repository, using 'Fixes #123', " +
               "'Closes #123', or the GitHub UI " +
               "(https://docs.github.com/en/issues/tracking-your-work-with-issues/using-issues/linking-a-pull-request-to-an-issue)\n" +
-              "After adding a linked issue, you may need to manually re-run this check from the Checks tab to update the status.\n" +
-              "NOTE: The API does not return results for issues linked from a different repository, so cross-repo references will not count toward the required number of linked issues."
-            );
+              "After adding a linked issue, you may need to manually re-run this check from the Checks tab to update the status.\n"            );
           } else {
             core.info(`✅ ${issues.length} linked issues found out of ${minimumLinkedIssues} required:`);
             issues.forEach(issue => {
