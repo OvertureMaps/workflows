@@ -17,15 +17,24 @@ inputs:
   privateKey:
     description: >
       GitHub App private key used to generate an installation token.
-      Pass secrets.CHECK_LINKED_ISSUE_APP_CLIENT_SECRET. Cannot be defaulted
+      Pass secrets.CHECK_LINKED_ISSUE_APP_PEM. Cannot be defaulted
       automatically as GitHub Actions does not allow secrets as input defaults.
-    required: true
+      When omitted, falls back to the default GITHUB_TOKEN (cross-repo linked
+      issue reads will not work in that case).
+    required: false
+    default: ""
 
 runs:
   using: composite
   steps:
+    - name: Mask private key
+      if: ${{ inputs.privateKey != '' }}
+      shell: bash
+      run: echo "::add-mask::${{ inputs.privateKey }}"
+
     - name: Generate GitHub App token
       id: app-token
+      if: ${{ inputs.privateKey != '' }}
       uses: actions/create-github-app-token@v1
       with:
         app-id: ${{ inputs.appId }}
@@ -35,7 +44,7 @@ runs:
     - name: Check for linked issue via GraphQL
       uses: actions/github-script@v7
       with:
-        github-token: ${{ steps.app-token.outputs.token }}
+        github-token: ${{ steps.app-token.outputs.token || github.token }}
         script: |
           const prNumber = context.payload.pull_request.number;
           const { owner, repo } = context.repo;
