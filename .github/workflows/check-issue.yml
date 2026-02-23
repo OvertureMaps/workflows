@@ -20,7 +20,6 @@
 name: Check Linked Issue
 
 on:
-  workflow_call:
   pull_request:
     types:
       - opened
@@ -46,3 +45,5 @@ jobs:
 
       - name: Check for linked issue
         uses: ./.workflows/.github/actions/check-linked-issue
+        with:
+          privateKey: ${{ secrets.CHECK_LINKED_ISSUE_APP_PRIVATE_KEY }}
