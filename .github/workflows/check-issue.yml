@@ -22,7 +22,7 @@ name: Check Linked Issue
 on:
   workflow_call:
     secrets:
-      CHECK_LINKED_ISSUE_APP_PRIVATE_KEY:
+      CHECK_LINKED_ISSUE_APP_CLIENT_SECRET:
         required: true
   pull_request:
     types:
