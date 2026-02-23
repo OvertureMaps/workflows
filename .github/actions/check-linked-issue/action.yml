@@ -10,13 +10,32 @@ inputs:
     description: Minimum number of linked issues required
     required: false
     default: 1
+  appId:
+    description: GitHub App ID used to generate an installation token for cross-repo linked issue reads
+    required: false
+    default: "2932845" #https://github.com/organizations/OvertureMaps/settings/apps/overture-check-linked-issue
+  privateKey:
+    description: >
+      GitHub App private key used to generate an installation token.
+      Pass secrets.CHECK_LINKED_ISSUE_APP_CLIENT_SECRET. Cannot be defaulted
+      automatically as GitHub Actions does not allow secrets as input defaults.
+    required: true
 
 runs:
   using: composite
   steps:
+    - name: Generate GitHub App token
+      id: app-token
+      uses: actions/create-github-app-token@v1
+      with:
+        app-id: ${{ inputs.appId }}
+        private-key: ${{ inputs.privateKey }}
+        owner: ${{ github.repository_owner }}
+
     - name: Check for linked issue via GraphQL
       uses: actions/github-script@v7
       with:
+        github-token: ${{ steps.app-token.outputs.token }}
         script: |
           const prNumber = context.payload.pull_request.number;
           const { owner, repo } = context.repo;
