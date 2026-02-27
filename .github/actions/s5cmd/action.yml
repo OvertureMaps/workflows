@@ -1,0 +1,119 @@
+---
+name: s5cmd
+description: >
+  Install and run s5cmd operations (cp, mv, rm, ls, sync, run) against
+  S3-compatible storage. Assumes AWS credentials are already configured in
+  the environment (e.g. via aws-actions/configure-aws-credentials).
+
+inputs:
+  command:
+    description: |
+      s5cmd subcommand to run. Must be one of: cp, mv, rm, ls, sync, run.
+
+      cp, mv, rm, ls, sync map directly to their aws s3 equivalents.
+
+      run (batch mode): executes a file of s5cmd commands concurrently — one
+      command per line, in the same syntax as the other subcommands. This is
+      the highest-throughput option: pass a manifest file as `batch-file` and
+      s5cmd will parallelise all commands simultaneously. No `source` or
+      `destination` needed. Example manifest line:
+      "cp s3://src/a.parquet s3://dst/a.parquet"
+    required: true
+  source:
+    description: >
+      Source path for cp, mv, rm, ls, and sync: a local file path or an
+      S3 URI (s3://bucket/key). Not used with the run command (use batch-file
+      instead). Omit for commands that take no source (e.g. ls).
+    required: false
+    default: ""
+  destination:
+    description: >
+      Destination path: a local file path or an S3 URI (s3://bucket/key).
+      Required for cp, mv, and sync. Omit for commands that take no destination (e.g. ls).
+    required: false
+    default: ""
+  batch-file:
+    description: >
+      Path to a manifest file for use with the run command only. Each line
+      contains one s5cmd command (e.g. "cp s3://src/a.parquet s3://dst/a.parquet").
+      Not used with cp, mv, rm, ls, or sync (use source instead).
+    required: false
+    default: ""
+  flags:
+    description: >
+      Additional flags to pass to the subcommand, as a single string.
+      Examples: "--acl public-read", "--recursive", "--no-sign-request".
+    required: false
+    default: ""
+  version:
+    description: >
+      s5cmd version to install. Pinned to 2.3.0 by default. Override only
+      when a specific version is needed; prefer the default to ensure
+      reproducible builds.
+    required: false
+    default: "2.3.0"
+
+runs:
+  using: composite
+  steps:
+    - name: Install s5cmd v${{ inputs.version }}
+      uses: peak/action-setup-s5cmd@bde462e7399c68b4a9b05549d90b0e7d5c95e60f
+      with:
+        version: v${{ inputs.version }}
+
+    - name: Validate inputs
+      shell: bash
+      run: |
+        CMD="${{ inputs.command }}"
+        SRC="${{ inputs.source }}"
+        DST="${{ inputs.destination }}"
+        BATCH="${{ inputs.batch-file }}"
+
+        case "$CMD" in
+          cp|mv|rm|ls|sync|run) ;;
+          *)
+            echo "::error::Unsupported s5cmd command: '${CMD}'. Must be one of: cp, mv, rm, ls, sync, run."
+            exit 1
+            ;;
+        esac
+
+        if [[ "$CMD" == "run" && -z "$BATCH" ]]; then
+          echo "::error::The 'run' command requires the 'batch-file' input."
+          exit 1
+        fi
+        if [[ "$CMD" == "run" && ( -n "$SRC" || -n "$DST" ) ]]; then
+          echo "::error::The 'run' command does not use 'source' or 'destination'. Use 'batch-file' instead."
+          exit 1
+        fi
+        if [[ "$CMD" != "run" && -n "$BATCH" ]]; then
+          echo "::error::'batch-file' is only valid with the 'run' command. Did you mean to use 'source'?"
+          exit 1
+        fi
+
+    - name: s5cmd ${{ inputs.command }}
+      shell: bash
+      run: |
+        CMD="${{ inputs.command }}"
+        SRC="${{ inputs.source }}"
+        DST="${{ inputs.destination }}"
+        BATCH="${{ inputs.batch-file }}"
+        FLAGS="${{ inputs.flags }}"
+
+        # Build argument array: subcommand, then any flags, then positional args
+        ARGS=("$CMD")
+
+        # Word-split flags safely (simple space split; quote within flags if needed)
+        if [[ -n "$FLAGS" ]]; then
+          read -ra FLAG_ARRAY <<< "$FLAGS"
+          ARGS+=("${FLAG_ARRAY[@]}")
+        fi
+
+        if [[ "$CMD" == "run" ]]; then
+          ARGS+=("$BATCH")
+        else
+          [[ -n "$SRC" ]] && ARGS+=("$SRC")
+          [[ -n "$DST" ]] && ARGS+=("$DST")
+        fi
+
+        echo "Running: s5cmd ${ARGS[*]}"
+        s5cmd "${ARGS[@]}"
