@@ -41,8 +41,8 @@ inputs:
     default: ""
   flags:
     description: >
-      Additional flags to pass to the subcommand, as a single string.
-      Examples: "--acl public-read", "--recursive", "--no-sign-request".
+      Global flags to pass to s5cmd before the subcommand, as a single string.
+      Examples: "--no-sign-request", "--credentials-file /path/to/creds".
     required: false
     default: ""
   version:
@@ -99,14 +99,16 @@ runs:
         BATCH="${{ inputs.batch-file }}"
         FLAGS="${{ inputs.flags }}"
 
-        # Build argument array: subcommand, then any flags, then positional args
-        ARGS=("$CMD")
+        # Build argument array: global flags first, then subcommand, then positional args
+        ARGS=()
 
         # Word-split flags safely (simple space split; quote within flags if needed)
         if [[ -n "$FLAGS" ]]; then
           read -ra FLAG_ARRAY <<< "$FLAGS"
           ARGS+=("${FLAG_ARRAY[@]}")
         fi
+
+        ARGS+=("$CMD")
 
         if [[ "$CMD" == "run" ]]; then
           ARGS+=("$BATCH")
