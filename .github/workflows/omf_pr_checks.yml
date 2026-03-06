@@ -19,8 +19,6 @@
 #   jobs:
 #     pr-checks:
 #       uses: OvertureMaps/workflows/.github/workflows/omf_pr_checks.yml@main
-#       secrets:
-#         CHECK_LINKED_ISSUE_APP_PEM: ${{ secrets.CHECK_LINKED_ISSUE_APP_PEM }}
 #
 name: OMF PR Checks
 
@@ -55,9 +53,6 @@ on:
         description: Label applied to stale PRs
         type: string
         default: stale
-    secrets:
-      CHECK_LINKED_ISSUE_APP_PEM:
-        required: false
 
 jobs:
 
@@ -93,8 +88,7 @@ jobs:
     name: issue
     if: inputs.enable-check-issue
     uses: OvertureMaps/workflows/.github/workflows/check-issue.yml@main
-    secrets:
-      CHECK_LINKED_ISSUE_APP_PEM: ${{ secrets.CHECK_LINKED_ISSUE_APP_PEM }}
+    secrets: inherit
 
   # TODO: implement PR heuristics (lines changed, files affected, label suggestions, etc.)
   # pr-heuristics:
