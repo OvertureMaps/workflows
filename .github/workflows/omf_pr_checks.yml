@@ -27,5 +27,9 @@ jobs:
 
   check-linked-issue:
     name: issue
-    uses: OvertureMaps/workflows/.github/workflows/check-issue.yml@main
-    secrets: inherit
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check for linked issue
+        uses: OvertureMaps/workflows/.github/actions/check-linked-issue@main
+        with:
+          privateKey: ${{ secrets.CHECK_LINKED_ISSUE_APP_PEM }}
