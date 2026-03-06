@@ -13,6 +13,11 @@ on:
   pull_request:
     types: [opened, reopened, edited, synchronize]
 
+permissions:
+  issues: write
+  pull-requests: write
+  statuses: write
+
 jobs:
 
   validate-pr-title:
