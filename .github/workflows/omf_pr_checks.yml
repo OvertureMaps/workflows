@@ -1,0 +1,103 @@
+---
+# 🦫 Reusable workflow providing standard Overture Maps Foundation PR checks.
+#
+# Bundles the following checks, each toggleable via inputs:
+#   - PR Staleness:    Marks PRs stale after N days, closes after additional M days
+#   - PR Title:        Validates PR titles against Overture's [TYPE] bracket format
+#   - Check Issue:     Enforces that PRs have a linked GitHub issue
+#   - PR Heuristics:   (TBD) Adds context like lines changed, file impact, etc.
+#
+# Usage: Reference this workflow from any repo in the OvertureMaps organization.
+#
+# Example (.github/workflows/pr-checks.yml):
+#   name: PR Checks
+#   on:
+#     pull_request:
+#       types: [opened, reopened, edited, synchronize]
+#     schedule:
+#       - cron: '0 0 * * *'  # required for the staleness check
+#   jobs:
+#     pr-checks:
+#       uses: OvertureMaps/workflows/.github/workflows/omf_pr_checks.yml@main
+#       secrets:
+#         CHECK_LINKED_ISSUE_APP_PEM: ${{ secrets.CHECK_LINKED_ISSUE_APP_PEM }}
+#
+name: OMF PR Checks
+
+on:
+  workflow_call:
+    inputs:
+      enable-staleness:
+        description: Mark PRs stale and close them after inactivity
+        type: boolean
+        default: true
+      enable-pr-title:
+        description: Validate PR title against Overture's [TYPE] bracket format
+        type: boolean
+        default: true
+      enable-check-issue:
+        description: Require a linked GitHub issue on every PR
+        type: boolean
+        default: true
+      enable-pr-heuristics:
+        description: Post a PR heuristics summary (lines changed, file impact, etc.) — TBD
+        type: boolean
+        default: false
+      stale-days:
+        description: Days of inactivity before a PR is labelled stale
+        type: number
+        default: 30
+      close-days:
+        description: Days after the stale label is applied before the PR is closed
+        type: number
+        default: 14
+      stale-label:
+        description: Label applied to stale PRs
+        type: string
+        default: stale
+    secrets:
+      CHECK_LINKED_ISSUE_APP_PEM:
+        required: false
+
+jobs:
+
+  pr-staleness:
+    name: staleness
+    if: inputs.enable-staleness
+    runs-on: ubuntu-slim
+    permissions:
+      issues: write
+      pull-requests: write
+    steps:
+      - uses: actions/stale@v9
+        with:
+          days-before-pr-stale: ${{ inputs.stale-days }}
+          days-before-pr-close: ${{ inputs.close-days }}
+          stale-pr-label: ${{ inputs.stale-label }}
+          stale-pr-message: >
+            This PR has been open without activity and has been marked as `${{ inputs.stale-label }}`.
+            It will be closed in ${{ inputs.close-days }} days if no further activity occurs.
+            Remove the `${{ inputs.stale-label }}` label or leave a comment to keep it open.
+          close-pr-message: >
+            This PR was automatically closed due to inactivity. Please reopen if you would like to continue.
+          # Staleness applies to PRs only — do not touch issues
+          days-before-issue-stale: -1
+          days-before-issue-close: -1
+
+  validate-pr-title:
+    name: title
+    if: inputs.enable-pr-title
+    uses: OvertureMaps/workflows/.github/workflows/validate-pr-title.yml@main
+
+  check-linked-issue:
+    name: issue
+    if: inputs.enable-check-issue
+    uses: OvertureMaps/workflows/.github/workflows/check-issue.yml@main
+    secrets:
+      CHECK_LINKED_ISSUE_APP_PEM: ${{ secrets.CHECK_LINKED_ISSUE_APP_PEM }}
+
+  # TODO: implement PR heuristics (lines changed, files affected, label suggestions, etc.)
+  # pr-heuristics:
+  #   name: PR Heuristics
+  #   if: inputs.enable-pr-heuristics
+  #   runs-on: ubuntu-slim
