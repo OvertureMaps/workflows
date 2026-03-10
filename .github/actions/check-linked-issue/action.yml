@@ -23,6 +23,10 @@ inputs:
       issue reads will not work in that case).
     required: false
     default: ""
+  ignoreDependabot:
+    description: Skip the linked issue check when the PR author is dependabot[bot]
+    required: false
+    default: "true"
 
 runs:
   using: composite
@@ -30,7 +34,10 @@ runs:
     - name: Mask private key
       if: ${{ inputs.privateKey != '' }}
       shell: bash
-      run: echo "::add-mask::${{ inputs.privateKey }}"
+      run: |
+        echo "::group::Masking private key"
+        echo "::add-mask::${{ inputs.privateKey }}"
+        echo "::endgroup::"
 
     - name: Generate GitHub App token
       id: app-token
@@ -49,6 +56,12 @@ runs:
           const prNumber = context.payload.pull_request.number;
           const { owner, repo } = context.repo;
           const minimumLinkedIssues = parseInt(core.getInput('minimumLinkedIssues')) || 1;
+          const ignoreDependabot = core.getInput('ignoreDependabot') !== 'false';
+
+          if (ignoreDependabot && context.payload.pull_request.user.login === 'dependabot[bot]') {
+            core.info('⏭️ Skipping linked issue check for dependabot PR.');
+            return;
+          }
 
           const query = `
             query($owner: String!, $repo: String!, $number: Int!) {
