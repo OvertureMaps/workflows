@@ -13,7 +13,7 @@
 # Example (.github/workflows/pr-validation.yml):
 #   name: PR Title Validation
 #   on:
-#     pull_request_target:
+#     pull_request:
 #       types: [opened, reopened, edited, synchronize]
 #   jobs:
 #     validate-title:
