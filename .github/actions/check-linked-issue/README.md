@@ -120,7 +120,6 @@ with:
   minimumLinkedIssues: 2
 ```
 
-
 ### Outputs
 
 This action has no outputs. It either passes or fails the step.
@@ -128,4 +127,4 @@ This action has no outputs. It either passes or fails the step.
 ### Supported trigger events
 
 The action reads `context.payload.pull_request.number`, so it must run on a
-`pull_request` or `pull_request_target` event.
+`pull_request` or similar event.
