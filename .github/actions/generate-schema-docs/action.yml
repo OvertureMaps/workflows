@@ -21,16 +21,34 @@ inputs:
     required: false
     default: 'false'
 
+outputs:
+  schema-sha:
+    description: 'The exact commit SHA of the OvertureMaps/schema repo that was checked out'
+    value: ${{ steps.get-sha.outputs.commit || steps.get-sha-fallback.outputs.sha }}
+  schema-ref:
+    description: 'The ref (branch/tag/SHA) of the OvertureMaps/schema repo that was checked out'
+    value: ${{ steps.get-sha.outputs.ref || steps.get-sha-fallback.outputs.ref }}
+
 runs:
   using: composite
   steps:
     - name: Check out schema repo
+      id: get-sha
       if: inputs.skip-checkout == 'false'
       uses: actions/checkout@v6
       with:
         repository: OvertureMaps/schema
         ref: ${{ inputs.schema-ref }}
         path: ${{ inputs.schema-path }}
+
+    - name: Resolve schema SHA (skip-checkout true)
+      id: get-sha-fallback
+      if: inputs.skip-checkout == 'true'
+      shell: bash
+      working-directory: ${{ inputs.schema-path }}
+      run: |
+        echo "sha=$(git rev-parse HEAD)" >> $GITHUB_OUTPUT
+        echo "ref=$(git symbolic-ref --short HEAD 2>/dev/null || git rev-parse HEAD)" >> $GITHUB_OUTPUT
 
     - name: Set up Python
       uses: actions/setup-python@v6
