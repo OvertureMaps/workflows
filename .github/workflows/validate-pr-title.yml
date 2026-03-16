@@ -23,14 +23,18 @@ name: Validate PR Title
 
 on:
   workflow_call:
-  pull_request:
+  pull_request_target:
     types:
       - opened
       - reopened
       - edited
       - synchronize
 
+# pull_request_target runs with write permissions so this workflow works for fork PRs.
+# SECURITY: This workflow must never check out or execute code from the PR branch.
+# If you need to add a step that does so, use the workflow_run pattern instead.
 permissions:
+  contents: none
   pull-requests: write
   issues: write
   statuses: write
