@@ -148,6 +148,17 @@ runs:
             return { name, description, content };
           });
 
+          // Log a summary of what was loaded
+          core.startGroup('Skills loaded');
+          for (const skill of skills) {
+            const ctxEntries = contextBySkill[skill.name] || [];
+            const ctxSummary = ctxEntries.length > 0
+              ? ctxEntries.map(r => `\n      ✅ ${r.ref} (${r.content.length} chars)`).join('')
+              : '\n      (no context files)';
+            core.info(`📄 ${skill.name} — ${skill.content.length} chars total${ctxSummary}`);
+          }
+          core.endGroup();
+
           fs.writeFileSync(
             path.join(process.env.RUNNER_TEMP, 'ai-review-skills.json'),
             JSON.stringify(skills)
@@ -171,10 +182,24 @@ runs:
           const { owner, repo } = context.repo;
           const prNumber = context.payload.pull_request.number;
 
-          const [prResp, filesResp] = await Promise.all([
+          const [prResp, filesResp, issuesResp] = await Promise.all([
             github.rest.pulls.get({ owner, repo, pull_number: prNumber }),
             github.rest.pulls.listFiles({ owner, repo, pull_number: prNumber, per_page: maxFiles }),
+            github.graphql(`
+              query($owner: String!, $repo: String!, $number: Int!) {
+                repository(owner: $owner, name: $repo) {
+                  pullRequest(number: $number) {
+                    closingIssuesReferences(first: 10) {
+                      nodes { number title url }
+                    }
+                  }
+                }
+              }`, { owner, repo, number: prNumber }
+            ).catch(() => null),
           ]);
+
+          const linkedIssues = issuesResp
+            ?.repository?.pullRequest?.closingIssuesReferences?.nodes ?? [];
 
           const MAX_PATCH_CHARS = 3000;
           const files = filesResp.data.map(f => ({
@@ -194,6 +219,7 @@ runs:
             title: prResp.data.title,
             body: prResp.data.body?.trim() || '',
             totalFiles: prResp.data.changed_files,
+            linkedIssues,
             files,
           };
 
