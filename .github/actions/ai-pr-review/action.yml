@@ -37,6 +37,12 @@ inputs:
     description: Maximum number of changed files to include in the diff sent to the model
     required: false
     default: "40"
+  dry-run:
+    description: >-
+      If true, print the review body to the log instead of posting a PR comment.
+      Useful for local testing with act.
+    required: false
+    default: "false"
 
 runs:
   using: composite
@@ -243,7 +249,7 @@ runs:
                 messages: [
                   {
                     role: 'system',
-                    content: 'Select which review skills apply. Respond with JSON only: {"skills": ["name"]}. Empty array if none.',
+                    content: 'Select which review skills apply to this pull request. Respond with JSON only: {"skills": ["name"], "reasoning": {"name": "one sentence why included or excluded"}}. Include a reasoning entry for every available skill whether selected or not. Empty skills array if none apply.',
                   },
                   {
                     role: 'user',
@@ -254,7 +260,7 @@ runs:
                       `Optional skills:\n${indexSummary}`,
                   },
                 ],
-                max_tokens: 200,
+                max_tokens: 600,
                 temperature: 0.1,
                 response_format: { type: 'json_object' },
               }),
@@ -264,7 +270,17 @@ runs:
             } else {
               const raw = (await resp.json()).choices?.[0]?.message?.content ?? '';
               try {
-                selectedNames = (JSON.parse(raw).skills || []).filter(n => selectable.some(s => s.name === n));
+                const parsed = JSON.parse(raw);
+                selectedNames = (parsed.skills || []).filter(n => selectable.some(s => s.name === n));
+                // Log per-skill reasoning
+                const reasoning = parsed.reasoning || {};
+                core.startGroup('Skill selection reasoning');
+                for (const skill of selectable) {
+                  const reason = reasoning[skill.name] || '(no reasoning provided)';
+                  const chosen = selectedNames.includes(skill.name) ? '✅ selected' : '⏭️ skipped';
+                  core.info(`${chosen}  ${skill.name}: ${reason}`);
+                }
+                core.endGroup();
               } catch {
                 core.warning(`Skill selection returned non-JSON: ${raw}`);
               }
@@ -284,6 +300,7 @@ runs:
         AI_TOKEN: ${{ inputs.github-token != '' && inputs.github-token || github.token }}
         MODEL_ID: ${{ inputs.model }}
         SELECTED_SKILLS: ${{ steps.select-skills.outputs.selected }}
+        DRY_RUN: ${{ inputs.dry-run }}
       with:
         github-token: ${{ inputs.github-token != '' && inputs.github-token || github.token }}
         script: |
@@ -347,10 +364,17 @@ runs:
           }
 
           const { owner, repo } = context.repo;
-          await github.rest.pulls.createReview({
-            owner, repo,
-            pull_number: context.payload.pull_request.number,
-            body: reviewBody,
-            event: 'COMMENT',
-          });
-          core.info('AI review posted successfully');
+          if (process.env.DRY_RUN === 'true') {
+            core.startGroup('AI review (dry run)');
+            core.info(reviewBody);
+            core.endGroup();
+            core.notice('Dry run — review not posted to PR.');
+          } else {
+            await github.rest.pulls.createReview({
+              owner, repo,
+              pull_number: context.payload.pull_request.number,
+              body: reviewBody,
+              event: 'COMMENT',
+            });
+            core.info('AI review posted successfully');
+          }
