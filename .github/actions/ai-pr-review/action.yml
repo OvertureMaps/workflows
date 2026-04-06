@@ -25,7 +25,7 @@ inputs:
   model:
     description: GitHub Models model ID used for the review
     required: false
-    default: openai/gpt-4.1
+    default: openai/gpt-4o
   github-token:
     description: >
       GitHub token. Must have pull-requests:write on the calling repo,
