@@ -1,0 +1,356 @@
+---
+name: AI PR Review
+description: >
+  Posts an AI-generated code review comment on a pull request. Discovers
+  skills from OvertureMaps/omf-devex (including any context files they
+  reference in other org repos), selects which apply via a fast model,
+  then posts a structured review. Skills are fetched, selected, and applied
+  as discrete steps for maintainability.
+
+inputs:
+  always-skills:
+    description: >
+      Comma-separated skill names that are always included regardless of
+      model selection. Defaults to 'pr-review'.
+    required: false
+    default: pr-review
+  selection-model:
+    description: GitHub Models model ID used for skill selection (fast/cheap)
+    required: false
+    default: openai/gpt-4o-mini
+  devex-ref:
+    description: Git ref of OvertureMaps/omf-devex to fetch skills from
+    required: false
+    default: main
+  model:
+    description: GitHub Models model ID used for the review
+    required: false
+    default: openai/gpt-4.1
+  github-token:
+    description: >
+      GitHub token. Must have pull-requests:write on the calling repo,
+      read access to OvertureMaps/omf-devex, and read access to any repos
+      referenced in skill context-files. Defaults to the workflow token.
+    required: false
+    default: ""
+  max-files:
+    description: Maximum number of changed files to include in the diff sent to the model
+    required: false
+    default: "40"
+
+runs:
+  using: composite
+  steps:
+
+    # -- Step 1a: Checkout skills from omf-devex --------------------------------
+    # Sparse-checks out only the skills/ tree from omf-devex at a fixed ref.
+    # No API calls per-file; the entire skills directory lands on disk at once.
+    - name: Checkout skills
+      uses: actions/checkout@v4
+      with:
+        repository: OvertureMaps/omf-devex
+        ref: ${{ inputs.devex-ref }}
+        sparse-checkout: skills
+        sparse-checkout-cone-mode: true
+        path: .omf-devex-skills
+        token: ${{ inputs.github-token != '' && inputs.github-token || github.token }}
+
+    # -- Step 1b: Load skills and fetch any cross-repo context files -----------
+    # Reads SKILL.md files from disk (no API calls), parses frontmatter for
+    # description and optional context-files, then fetches any referenced files
+    # from other org repos via the API. Writes skills.json to RUNNER_TEMP.
+    - name: Load skills and fetch context files
+      id: fetch-skills
+      uses: actions/github-script@v7
+      env:
+        AI_TOKEN: ${{ inputs.github-token != '' && inputs.github-token || github.token }}
+        SKILLS_DIR: ${{ github.workspace }}/.omf-devex-skills/skills
+      with:
+        github-token: ${{ inputs.github-token != '' && inputs.github-token || github.token }}
+        script: |
+          const fs = require('fs');
+          const path = require('path');
+          const skillsDir = process.env.SKILLS_DIR;
+
+          // Read skill folders and SKILL.md files from disk
+          const skillFolders = fs.readdirSync(skillsDir, { withFileTypes: true })
+            .filter(e => e.isDirectory())
+            .map(e => e.name);
+          core.info(`Found ${skillFolders.length} skill(s): ${skillFolders.join(', ')}`);
+
+          const rawSkills = skillFolders.map(name => ({
+            name,
+            raw: fs.readFileSync(path.join(skillsDir, name, 'SKILL.md'), 'utf-8'),
+          }));
+
+          // Parse frontmatter: description + optional context-files list
+          // context-files format one item per line: "owner/repo:path/to/file"
+          function parseFrontmatter(raw) {
+            const fmMatch = raw.match(/^---\n([\s\S]*?)\n---/);
+            if (!fmMatch) return { description: '', contextFiles: [] };
+            const fm = fmMatch[1];
+            const descMatch = fm.match(/description:\s*[>|]?\s*\n?([\s\S]*?)(?=\n\w|$)/);
+            const description = descMatch
+              ? descMatch[1].replace(/\n\s+/g, ' ').trim().replace(/^['"]|['"]$/g, '')
+              : '';
+            const cfSection = fm.match(/^context-files:\s*\n((?:\s*-\s*.+\n?)*)/m);
+            const contextFiles = cfSection
+              ? [...cfSection[1].matchAll(/^\s*-\s*(.+)$/gm)].map(m => m[1].trim())
+              : [];
+            return { description, contextFiles };
+          }
+
+          // Collect all cross-repo context-file refs across all skills, fetch in parallel
+          const allRefs = rawSkills.flatMap(s => {
+            const { contextFiles } = parseFrontmatter(s.raw);
+            return contextFiles.map(ref => ({ skillName: s.name, ref }));
+          });
+
+          const fetchedContext = await Promise.all(
+            allRefs.map(async ({ skillName, ref }) => {
+              const sep = ref.indexOf(':');
+              if (sep === -1) {
+                core.warning(`Skill '${skillName}': bad context-file ref '${ref}' (expected owner/repo:path)`);
+                return null;
+              }
+              const [repoFull, filePath] = [ref.slice(0, sep), ref.slice(sep + 1)];
+              const [cfOwner, cfRepo] = repoFull.split('/');
+              try {
+                core.info(`Fetching context file ${ref} for skill '${skillName}'`);
+                const resp = await github.rest.repos.getContent({ owner: cfOwner, repo: cfRepo, path: filePath });
+                return { skillName, ref, content: Buffer.from(resp.data.content, 'base64').toString('utf-8') };
+              } catch (err) {
+                core.warning(`Skill '${skillName}': could not fetch ${ref} — ${err.message}`);
+                return null;
+              }
+            })
+          );
+
+          // Group context by skill name
+          const contextBySkill = {};
+          for (const r of fetchedContext.filter(Boolean)) {
+            (contextBySkill[r.skillName] ??= []).push(r);
+          }
+
+          // Build final skill objects: SKILL.md content + appended context blocks
+          const skills = rawSkills.map(({ name, raw }) => {
+            const { description } = parseFrontmatter(raw);
+            const ctxBlocks = (contextBySkill[name] || [])
+              .map(r => `<!-- context: ${r.ref} -->\n\`\`\`\n${r.content}\n\`\`\``)
+              .join('\n\n');
+            const content = ctxBlocks ? `${raw}\n\n## Context Files\n\n${ctxBlocks}` : raw;
+            return { name, description, content };
+          });
+
+          fs.writeFileSync(
+            path.join(process.env.RUNNER_TEMP, 'ai-review-skills.json'),
+            JSON.stringify(skills)
+          );
+          core.info(`Wrote ${skills.length} skill(s) to ai-review-skills.json`);
+
+    # -- Step 2: Fetch PR metadata and diff ------------------------------------
+    # Retrieves PR title, body, changed files, and patches in one pass.
+    # Writes pr.json to RUNNER_TEMP. Outputs changed-paths for the next step.
+    - name: Fetch PR diff
+      id: fetch-diff
+      uses: actions/github-script@v7
+      env:
+        MAX_FILES: ${{ inputs.max-files }}
+      with:
+        github-token: ${{ inputs.github-token != '' && inputs.github-token || github.token }}
+        script: |
+          const fs = require('fs');
+          const path = require('path');
+          const maxFiles = parseInt(process.env.MAX_FILES) || 40;
+          const { owner, repo } = context.repo;
+          const prNumber = context.payload.pull_request.number;
+
+          const [prResp, filesResp] = await Promise.all([
+            github.rest.pulls.get({ owner, repo, pull_number: prNumber }),
+            github.rest.pulls.listFiles({ owner, repo, pull_number: prNumber, per_page: maxFiles }),
+          ]);
+
+          const MAX_PATCH_CHARS = 3000;
+          const files = filesResp.data.map(f => ({
+            filename: f.filename,
+            status: f.status,
+            additions: f.additions,
+            deletions: f.deletions,
+            patch: f.patch
+              ? (f.patch.length > MAX_PATCH_CHARS
+                  ? f.patch.slice(0, MAX_PATCH_CHARS) + '\n... (truncated)'
+                  : f.patch)
+              : '(binary or no textual diff)',
+          }));
+
+          const prData = {
+            number: prResp.data.number,
+            title: prResp.data.title,
+            body: prResp.data.body?.trim() || '',
+            totalFiles: prResp.data.changed_files,
+            files,
+          };
+
+          fs.writeFileSync(
+            path.join(process.env.RUNNER_TEMP, 'ai-review-diff.json'),
+            JSON.stringify(prData)
+          );
+          core.setOutput('changed-paths', files.map(f => f.filename).join('\n'));
+          core.info(`Fetched diff: ${files.length} of ${prData.totalFiles} file(s)`);
+
+    # -- Step 3: Select applicable skills --------------------------------------
+    # Uses a fast/cheap model to decide which optional skills apply, based on
+    # the PR context and each skill's frontmatter description. Always-skills
+    # bypass this step. Outputs selected skill names as a JSON array string.
+    - name: Select skills
+      id: select-skills
+      uses: actions/github-script@v7
+      env:
+        AI_TOKEN: ${{ inputs.github-token != '' && inputs.github-token || github.token }}
+        ALWAYS_SKILLS: ${{ inputs.always-skills }}
+        SELECTION_MODEL_ID: ${{ inputs.selection-model }}
+        CHANGED_PATHS: ${{ steps.fetch-diff.outputs.changed-paths }}
+      with:
+        script: |
+          const fs = require('fs');
+          const path = require('path');
+          const token = process.env.AI_TOKEN;
+          const alwaysSkills = new Set(
+            (process.env.ALWAYS_SKILLS || '').split(',').map(s => s.trim()).filter(Boolean)
+          );
+          const selectionModelId = process.env.SELECTION_MODEL_ID;
+          const changedPaths = process.env.CHANGED_PATHS || '';
+
+          const skills = JSON.parse(
+            fs.readFileSync(path.join(process.env.RUNNER_TEMP, 'ai-review-skills.json'), 'utf-8')
+          );
+          const prData = JSON.parse(
+            fs.readFileSync(path.join(process.env.RUNNER_TEMP, 'ai-review-diff.json'), 'utf-8')
+          );
+
+          const alwaysNames = skills.filter(s => alwaysSkills.has(s.name)).map(s => s.name);
+          const selectable = skills.filter(s => !alwaysSkills.has(s.name));
+          let selectedNames = [];
+
+          if (selectable.length > 0) {
+            core.info(`Selecting from ${selectable.length} optional skill(s) using ${selectionModelId}`);
+            const indexSummary = selectable.map(s => `- ${s.name}: ${s.description}`).join('\n');
+            const resp = await fetch('https://models.inference.ai.azure.com/chat/completions', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+              body: JSON.stringify({
+                model: selectionModelId,
+                messages: [
+                  {
+                    role: 'system',
+                    content: 'Select which review skills apply. Respond with JSON only: {"skills": ["name"]}. Empty array if none.',
+                  },
+                  {
+                    role: 'user',
+                    content:
+                      `PR title: ${prData.title}\n\n` +
+                      `PR description: ${prData.body || '(none)'}\n\n` +
+                      `Changed files:\n${changedPaths}\n\n` +
+                      `Optional skills:\n${indexSummary}`,
+                  },
+                ],
+                max_tokens: 200,
+                temperature: 0.1,
+                response_format: { type: 'json_object' },
+              }),
+            });
+            if (!resp.ok) {
+              core.warning(`Skill selection failed (${resp.status}), using always-skills only`);
+            } else {
+              const raw = (await resp.json()).choices?.[0]?.message?.content ?? '';
+              try {
+                selectedNames = (JSON.parse(raw).skills || []).filter(n => selectable.some(s => s.name === n));
+              } catch {
+                core.warning(`Skill selection returned non-JSON: ${raw}`);
+              }
+            }
+          }
+
+          const finalNames = [...alwaysNames, ...selectedNames];
+          core.info(`Final skill set: ${finalNames.join(', ') || '(none)'}`);
+          core.setOutput('selected', JSON.stringify(finalNames));
+
+    # -- Step 4: Compose prompt and post review --------------------------------
+    # Reads skills.json and pr.json, builds the system prompt from selected
+    # skills (in order), calls the review model, and posts a PR review comment.
+    - name: Post review
+      uses: actions/github-script@v7
+      env:
+        AI_TOKEN: ${{ inputs.github-token != '' && inputs.github-token || github.token }}
+        MODEL_ID: ${{ inputs.model }}
+        SELECTED_SKILLS: ${{ steps.select-skills.outputs.selected }}
+      with:
+        github-token: ${{ inputs.github-token != '' && inputs.github-token || github.token }}
+        script: |
+          const fs = require('fs');
+          const path = require('path');
+          const token = process.env.AI_TOKEN;
+          const modelId = process.env.MODEL_ID;
+          const selectedNames = JSON.parse(process.env.SELECTED_SKILLS || '[]');
+
+          const skills = JSON.parse(
+            fs.readFileSync(path.join(process.env.RUNNER_TEMP, 'ai-review-skills.json'), 'utf-8')
+          );
+          const prData = JSON.parse(
+            fs.readFileSync(path.join(process.env.RUNNER_TEMP, 'ai-review-diff.json'), 'utf-8')
+          );
+
+          // Compose system prompt from selected skills in order
+          const finalSkills = selectedNames.map(n => skills.find(s => s.name === n)).filter(Boolean);
+          const systemPrompt = finalSkills
+            .map(s => `<!-- skill: ${s.name} -->\n${s.content}`)
+            .join('\n\n---\n\n');
+
+          // Build user prompt from PR header + diff blocks
+          const prHeader = `## ${prData.title}\n\n${prData.body || '(no description provided)'}`;
+          const diffBlocks = prData.files.map(
+            f => `### ${f.filename} [${f.status}] +${f.additions} -${f.deletions}\n\`\`\`diff\n${f.patch}\n\`\`\``
+          );
+          const truncationNote = prData.totalFiles > prData.files.length
+            ? `\n> Note: ${prData.totalFiles - prData.files.length} file(s) omitted.\n`
+            : '';
+          const userPrompt =
+            `Review this pull request.\n\n${prHeader}\n\n` +
+            `## Changed Files (${prData.files.length} of ${prData.totalFiles})${truncationNote}\n\n` +
+            diffBlocks.join('\n\n');
+
+          // Call review model
+          core.info(`Calling ${modelId} for review`);
+          const resp = await fetch('https://models.inference.ai.azure.com/chat/completions', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+            body: JSON.stringify({
+              model: modelId,
+              messages: [
+                ...(systemPrompt ? [{ role: 'system', content: systemPrompt }] : []),
+                { role: 'user', content: userPrompt },
+              ],
+              max_tokens: 1500,
+              temperature: 0.2,
+            }),
+          });
+
+          if (!resp.ok) {
+            core.setFailed(`GitHub Models API error ${resp.status}: ${await resp.text()}`);
+            return;
+          }
+
+          const reviewBody = (await resp.json()).choices?.[0]?.message?.content;
+          if (!reviewBody) {
+            core.setFailed('GitHub Models returned an empty response');
+            return;
+          }
+
+          const { owner, repo } = context.repo;
+          await github.rest.pulls.createReview({
+            owner, repo,
+            pull_number: context.payload.pull_request.number,
+            body: reviewBody,
+            event: 'COMMENT',
+          });
+          core.info('AI review posted successfully');
