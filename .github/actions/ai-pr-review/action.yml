@@ -17,7 +17,7 @@ inputs:
   selection-model:
     description: GitHub Models model ID used for skill selection (fast/cheap)
     required: false
-    default: openai/gpt-4o-mini
+    default: gpt-4o-mini
   devex-ref:
     description: Git ref of OvertureMaps/omf-devex to fetch skills from
     required: false
@@ -25,7 +25,7 @@ inputs:
   model:
     description: GitHub Models model ID used for the review
     required: false
-    default: openai/gpt-4o
+    default: gpt-4o
   github-token:
     description: >
       GitHub token. Must have pull-requests:write on the calling repo,
