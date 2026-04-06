@@ -219,6 +219,8 @@ runs:
             title: prResp.data.title,
             body: prResp.data.body?.trim() || '',
             totalFiles: prResp.data.changed_files,
+            headRef: prResp.data.head.ref,
+            baseRef: prResp.data.base.ref,
             linkedIssues,
             files,
           };
@@ -350,7 +352,10 @@ runs:
             .join('\n\n---\n\n');
 
           // Build user prompt from PR header + diff blocks
-          const prHeader = `## ${prData.title}\n\n${prData.body || '(no description provided)'}`;
+          const prHeader = `## ${prData.title}\n\nBranch: \`${prData.headRef}\` → \`${prData.baseRef}\`\n\n${prData.body || '(no description provided)'}`;
+          const issuesSection = prData.linkedIssues?.length > 0
+            ? `## Linked Issues\n${prData.linkedIssues.map(i => `- #${i.number} ${i.title} (${i.url})`).join('\n')}`
+            : `## Linked Issues\nNone — this PR has no closing issue references.`;
           const diffBlocks = prData.files.map(
             f => `### ${f.filename} [${f.status}] +${f.additions} -${f.deletions}\n\`\`\`diff\n${f.patch}\n\`\`\``
           );
@@ -358,7 +363,7 @@ runs:
             ? `\n> Note: ${prData.totalFiles - prData.files.length} file(s) omitted.\n`
             : '';
           const userPrompt =
-            `Review this pull request.\n\n${prHeader}\n\n` +
+            `Review this pull request.\n\n${prHeader}\n\n${issuesSection}\n\n` +
             `## Changed Files (${prData.files.length} of ${prData.totalFiles})${truncationNote}\n\n` +
             diffBlocks.join('\n\n');
 
