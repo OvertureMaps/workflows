@@ -1,0 +1,39 @@
+---
+# Standard Overture Maps Foundation security checks for GitHub Actions workflows.
+#
+# Bundles the following checks:
+#   - zizmor:   Audits GitHub Actions workflow files for security vulnerabilities
+#               using the 'auditor' persona for thorough coverage.
+#
+# Designed to run as a GitHub Ruleset required workflow.
+#
+# SECURITY: This workflow checks out PR branch code for static analysis only.
+# No PR code is executed. Write access is limited to uploading SARIF results
+# to GitHub Advanced Security.
+#
+name: OMF Security Checks
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize]
+
+permissions:
+  contents: read
+  actions: read
+  security-events: write
+
+jobs:
+
+  zizmor:
+    name: zizmor
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Run zizmor 🌈
+        uses: zizmorcore/zizmor-action@71321a20a9ded102f6e9ce5718a2fcec2c4f70d8 # v0.5.2
+        with:
+          persona: auditor
