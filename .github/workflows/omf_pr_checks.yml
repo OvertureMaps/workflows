@@ -32,7 +32,7 @@ jobs:
       pull-requests: write # to post PR title validation comments
       issues: write # to post PR-related issue comments
       statuses: write # to update commit status checks
-    uses: OvertureMaps/workflows/.github/workflows/validate-pr-title.yml@faa3fa4bbe01d85dc2e2139ff1f74ce70feb7df9 # main
+    uses: ./.github/workflows/validate-pr-title.yml
 
   check-linked-issue:
     name: issue
@@ -44,6 +44,6 @@ jobs:
       statuses: write # to update commit status checks
     steps:
       - name: Check for linked issue
-        uses: OvertureMaps/workflows/.github/actions/check-linked-issue@faa3fa4bbe01d85dc2e2139ff1f74ce70feb7df9 # main
+        uses: ./.github/actions/check-linked-issue
         with:
           privateKey: ${{ secrets.CHECK_LINKED_ISSUE_APP_PEM }}
