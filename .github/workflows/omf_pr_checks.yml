@@ -10,29 +10,40 @@
 name: OMF PR Checks
 
 on:
-  pull_request_target:
+  pull_request_target: # zizmor: ignore[dangerous-triggers]
     types: [opened, reopened, edited, synchronize]
 
 # pull_request_target runs with write permissions so this workflow works for fork PRs.
 # SECURITY: This workflow must never check out or execute code from the PR branch.
 # If you need to add a step that does so, use the workflow_run pattern instead.
 permissions:
-  contents: none
-  issues: write
-  pull-requests: write
-  statuses: write
+  contents: none # no repository content access needed
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
 
 jobs:
 
   validate-pr-title:
     name: title
-    uses: OvertureMaps/workflows/.github/workflows/validate-pr-title.yml@main
+    permissions:
+      contents: none # no repository content access needed
+      pull-requests: write # to post PR title validation comments
+      issues: write # to post PR-related issue comments
+      statuses: write # to update commit status checks
+    uses: OvertureMaps/workflows/.github/workflows/validate-pr-title.yml@faa3fa4bbe01d85dc2e2139ff1f74ce70feb7df9 # main
 
   check-linked-issue:
     name: issue
     runs-on: ubuntu-latest
+    environment: check-linked-issue-app
+    permissions:
+      contents: none # no repository content access needed
+      pull-requests: read # to query PR metadata and closing issue references
+      statuses: write # to update commit status checks
     steps:
       - name: Check for linked issue
-        uses: OvertureMaps/workflows/.github/actions/check-linked-issue@main
+        uses: OvertureMaps/workflows/.github/actions/check-linked-issue@faa3fa4bbe01d85dc2e2139ff1f74ce70feb7df9 # main
         with:
           privateKey: ${{ secrets.CHECK_LINKED_ISSUE_APP_PEM }}

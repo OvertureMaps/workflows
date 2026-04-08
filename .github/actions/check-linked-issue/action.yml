@@ -36,20 +36,22 @@ runs:
       shell: bash
       run: |
         echo "::group::Masking private key"
-        echo "::add-mask::${{ inputs.privateKey }}"
+        echo "::add-mask::${INPUTS_PRIVATEKEY}"
         echo "::endgroup::"
+      env:
+        INPUTS_PRIVATEKEY: ${{ inputs.privateKey }}
 
     - name: Generate GitHub App token
       id: app-token
       if: ${{ inputs.privateKey != '' }}
-      uses: actions/create-github-app-token@v1
+      uses: actions/create-github-app-token@d72941d797fd3113feb6b93fd0dec494b13a2547 # v1.12.0
       with:
         app-id: ${{ inputs.appId }}
         private-key: ${{ inputs.privateKey }}
         owner: ${{ github.repository_owner }}
 
     - name: Check for linked issue via GraphQL
-      uses: actions/github-script@v7
+      uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7.1.0
       with:
         github-token: ${{ steps.app-token.outputs.token || github.token }}
         script: |
