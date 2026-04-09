@@ -19,14 +19,20 @@ on:
 
 permissions:
   contents: read
-  actions: read
-  security-events: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
 
   zizmor:
     name: zizmor
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read # to read workflow files for security auditing
+      security-events: write # to upload SARIF results to GitHub Advanced Security
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2

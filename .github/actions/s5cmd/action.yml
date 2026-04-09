@@ -64,10 +64,10 @@ runs:
     - name: Validate inputs
       shell: bash
       run: |
-        CMD="${{ inputs.command }}"
-        SRC="${{ inputs.source }}"
-        DST="${{ inputs.destination }}"
-        BATCH="${{ inputs.batch-file }}"
+        CMD="${INPUTS_COMMAND}"
+        SRC="${INPUTS_SOURCE}"
+        DST="${INPUTS_DESTINATION}"
+        BATCH="${INPUTS_BATCH_FILE}"
 
         case "$CMD" in
           cp|mv|rm|ls|sync|run) ;;
@@ -89,15 +89,20 @@ runs:
           echo "::error::'batch-file' is only valid with the 'run' command. Did you mean to use 'source'?"
           exit 1
         fi
+      env:
+        INPUTS_COMMAND: ${{ inputs.command }}
+        INPUTS_SOURCE: ${{ inputs.source }}
+        INPUTS_DESTINATION: ${{ inputs.destination }}
+        INPUTS_BATCH_FILE: ${{ inputs.batch-file }}
 
     - name: s5cmd ${{ inputs.command }}
       shell: bash
       run: |
-        CMD="${{ inputs.command }}"
-        SRC="${{ inputs.source }}"
-        DST="${{ inputs.destination }}"
-        BATCH="${{ inputs.batch-file }}"
-        FLAGS="${{ inputs.flags }}"
+        CMD="${INPUTS_COMMAND}"
+        SRC="${INPUTS_SOURCE}"
+        DST="${INPUTS_DESTINATION}"
+        BATCH="${INPUTS_BATCH_FILE}"
+        FLAGS="${INPUTS_FLAGS}"
 
         # Build argument array: global flags first, then subcommand, then positional args
         ARGS=()
@@ -119,3 +124,9 @@ runs:
 
         echo "Running: s5cmd ${ARGS[*]}"
         s5cmd "${ARGS[@]}"
+      env:
+        INPUTS_COMMAND: ${{ inputs.command }}
+        INPUTS_SOURCE: ${{ inputs.source }}
+        INPUTS_DESTINATION: ${{ inputs.destination }}
+        INPUTS_BATCH_FILE: ${{ inputs.batch-file }}
+        INPUTS_FLAGS: ${{ inputs.flags }}
