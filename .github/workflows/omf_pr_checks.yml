@@ -19,6 +19,10 @@ on:
 permissions:
   contents: none # no repository content access needed
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
 jobs:
 
   validate-pr-title:
