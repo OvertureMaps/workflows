@@ -11,7 +11,7 @@
 # No PR code is executed. Write access is limited to uploading SARIF results
 # to GitHub Advanced Security.
 #
-name: OMF Security Checks
+name: OMF Security Checks (pedantic)
 
 on:
   pull_request:
@@ -43,3 +43,4 @@ jobs:
         uses: zizmorcore/zizmor-action@71321a20a9ded102f6e9ce5718a2fcec2c4f70d8 # v0.5.2
         with:
           persona: pedantic
+          advanced-security: false # Use GH PR Annotations instead of uploading SARIF results for better visibility in the PR
