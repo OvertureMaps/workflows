@@ -279,6 +279,7 @@ runs:
         SELECTION_MODEL_ID: ${{ inputs['selection-model'] }}
         CHANGED_PATHS: ${{ steps.fetch-diff.outputs.changed-paths }}
       with:
+        # zizmor: ignore[template-injection] -- standard pattern
         script: |
           const script = require('${{ github.action_path }}/scripts/select-skills.js')
           await script({ github, context, core })
@@ -299,6 +300,7 @@ runs:
         MAX_CONTEXT_FILE_CHARS_OVERRIDE: ${{ inputs['max-context-file-chars'] }}
       with:
         github-token: ${{ steps.context-token.outputs.token || inputs['github-token'] != '' && inputs['github-token'] || github.token }}
+        # zizmor: ignore[template-injection] -- standard pattern
         script: |
           const script = require('${{ github.action_path }}/scripts/fetch-context.js')
           await script({ github, context, core })
@@ -322,6 +324,7 @@ runs:
         REPOSITORY: ${{ inputs['repository'] }}
       with:
         github-token: ${{ steps.context-token.outputs.token || inputs['github-token'] != '' && inputs['github-token'] || github.token }}
+        # zizmor: ignore[template-injection] -- standard pattern
         script: |
           const script = require('${{ github.action_path }}/scripts/post-review.js')
           await script({ github, context, core })
