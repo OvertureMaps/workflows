@@ -177,6 +177,7 @@ runs:
     # Using env vars would defeat the purpose — the mask command itself is what sets them.
     - name: Mask secrets
       shell: bash
+      # zizmor: ignore[template-injection] -- intentional; must see literal value to mask it
       run: |
         if [ -n "${{ inputs['app-private-key'] }}" ]; then
           echo "::add-mask::${{ inputs['app-private-key'] }}"
@@ -194,6 +195,7 @@ runs:
     - name: Resolve target repo name
       id: target_repo
       shell: bash
+      # zizmor: ignore[template-injection] -- must read owner/repo from caller; no env var alternative
       run: |
         repo="${{ inputs['repository'] != '' && inputs['repository'] || github.repository }}"
         echo "name=${repo##*/}" >> "$GITHUB_OUTPUT"
@@ -239,6 +241,7 @@ runs:
         SKILLS_DIR: ${{ format('{0}/.omf-devex-skills/skills', github.workspace) }}
       with:
         github-token: ${{ steps.context-token.outputs.token || inputs['github-token'] != '' && inputs['github-token'] || github.token }}
+        # zizmor: ignore[template-injection] -- standard GitHub Actions pattern for requiring local scripts
         script: |
           const script = require('${{ github.action_path }}/scripts/load-skills.js')
           await script({ github, context, core })

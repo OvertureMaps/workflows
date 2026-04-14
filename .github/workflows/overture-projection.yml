@@ -182,8 +182,7 @@ jobs:
 
     steps:
       - name: Run Overture PRojection
-        # zizmor: ignore[unpinned-uses] -- self-referential; SHA updated in a follow-up commit after action changes are committed
-        uses: OvertureMaps/workflows/.github/actions/overture-projection@main
+        uses: OvertureMaps/workflows/.github/actions/overture-projection@main # zizmor: ignore[unpinned-uses] -- self-referential; SHA updated in follow-up commit
         with:
           always-skills: "pr-review"
           repository: ${{ github.event_name == 'pull_request' && github.event.repository.full_name || inputs.repository || github.event.repository.full_name }}
@@ -196,6 +195,5 @@ jobs:
           max-output-tokens: ${{ github.event_name != 'pull_request' && inputs.max_output_tokens || '' }}
           dry-run: ${{ github.event_name == 'pull_request' && env.ACT == 'true' || inputs.dry_run == true || inputs.dry_run == 'true' || env.ACT == 'true' }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
-          # zizmor: ignore[secrets-outside-env] -- no deployment environment needed; these are org secrets for a review bot
-          app-private-key: ${{ secrets.OVERTURE_PROJECTION_APP_PEM }}
-          anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
+          app-private-key: ${{ secrets.OVERTURE_PROJECTION_APP_PEM }} # zizmor: ignore[secrets-outside-env] -- org secret, not environment-gated
+          anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }} # zizmor: ignore[secrets-outside-env] -- org secret, not environment-gated
