@@ -236,7 +236,7 @@ jobs:
 
     steps:
       - name: Run Overture PRojection
-        uses: OvertureMaps/omf-devex/.github/actions/overture-projection@main
+        uses: OvertureMaps/omf-devex/.github/actions/overture-projection@PRojection-as-reusable-wkflow
         with:
           always-skills: "pr-review"
           repository: ${{ inputs.repository || github.event.repository.full_name }}
