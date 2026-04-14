@@ -19,7 +19,7 @@
 #     validate-title:
 #       uses: OvertureMaps/workflows/.github/workflows/validate-pr-title.yml@main
 #
-name: Validate PR Title
+name: Validate PR Title # zizmor: ignore[concurrency-limits]
 
 on:
   workflow_call:
