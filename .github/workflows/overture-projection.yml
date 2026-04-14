@@ -236,7 +236,7 @@ jobs:
 
     steps:
       - name: Run Overture PRojection
-        uses: ./.github/actions/overture-projection@PRojection-as-reusable-wkflow
+        uses: OvertureMaps/workflows/.github/actions/overture-projection@6e668497356e45e821c7f973dac63d46d37778bd # reusable-PRojection-workflow
         with:
           always-skills: "pr-review"
           repository: ${{ inputs.repository || github.event.repository.full_name }}
@@ -251,3 +251,4 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           app-private-key: ${{ secrets.OVERTURE_PROJECTION_APP_PEM }}
           anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
+
