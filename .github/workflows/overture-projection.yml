@@ -175,9 +175,6 @@ on:
         type: boolean
         default: false
     secrets:
-      GITHUB_TOKEN:
-        description: GitHub token with repo, pull-requests, issues, and models scopes
-        required: true
       OVERTURE_PROJECTION_APP_PEM:
         description: App private key for cross-repo context file reads
         required: true
