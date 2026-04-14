@@ -175,7 +175,7 @@ jobs:
 
     steps:
       - name: Run Overture PRojection
-        uses: OvertureMaps/workflows/.github/actions/overture-projection@reusable-PRojection-workflow
+        uses: OvertureMaps/workflows/.github/actions/overture-projection@main
         with:
           always-skills: "pr-review"
           repository: ${{ github.event_name == 'pull_request' && github.event.repository.full_name || inputs.repository || github.event.repository.full_name }}
