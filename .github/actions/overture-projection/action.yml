@@ -189,7 +189,7 @@ runs:
     # 'repository' input is owner/repo; the create-github-app-token 'repositories'
     # input requires bare repo names. Falls back to the current repo.
     - name: Resolve target repo name
-      id: target-repo
+      id: target_repo
       shell: bash
       run: |
         repo="${{ inputs['repository'] != '' && inputs['repository'] || github.repository }}"
@@ -208,7 +208,7 @@ runs:
         owner: ${{ github.repository_owner }}
         repositories: |
           omf-devex
-          ${{ steps['target-repo'].outputs.name }}
+          ${{ steps.target_repo.outputs.name }}
 
     # -- Step 1a: Checkout skills from omf-devex --------------------------------
     # Sparse-checks out only the skills/ tree from omf-devex at a fixed ref.
