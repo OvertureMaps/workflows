@@ -177,7 +177,19 @@ runs:
       shell: bash
       run: echo "::add-mask::${{ inputs['app-private-key'] }}"
 
-    # -- Step 0b: Generate an installation token for cross-repo context reads --
+    # -- Step 0b: Resolve target repo name (bare, no owner prefix) -------------
+    # 'repository' input is owner/repo; the create-github-app-token 'repositories'
+    # input requires bare repo names. Falls back to the current repo.
+    - name: Resolve target repo name
+      id: target-repo
+      shell: bash
+      run: |
+        repo="${{ inputs['repository'] != '' && inputs['repository'] || github.repository }}"
+        echo "name=${repo##*/}" >> "$GITHUB_OUTPUT"
+
+    # -- Step 0c: Generate an installation token for cross-repo context reads --
+    # Scoped to exactly two repos: omf-devex (skills + context files) and the
+    # target PR repo (posting the review). Avoids the default org-wide token.
     - name: Generate context token
       id: context-token
       if: ${{ inputs['app-private-key'] != '' }}
@@ -186,6 +198,9 @@ runs:
         app-id: ${{ inputs['app-id'] }}
         private-key: ${{ inputs['app-private-key'] }}
         owner: ${{ github.repository_owner }}
+        repositories: |
+          omf-devex
+          ${{ steps['target-repo'].outputs.name }}
 
     # -- Step 1a: Checkout skills from omf-devex --------------------------------
     # Sparse-checks out only the skills/ tree from omf-devex at a fixed ref.
@@ -293,3 +308,4 @@ runs:
         script: |
           const script = require('${{ github.action_path }}/scripts/post-review.js')
           await script({ github, context, core })
+
