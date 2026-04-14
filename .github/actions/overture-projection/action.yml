@@ -208,6 +208,7 @@ runs:
         owner: ${{ github.repository_owner }}
         repositories: |
           omf-devex
+          operating-procedures
           ${{ steps.target_repo.outputs.name }}
 
     # -- Step 1a: Checkout skills from omf-devex --------------------------------
@@ -316,4 +317,3 @@ runs:
         script: |
           const script = require('${{ github.action_path }}/scripts/post-review.js')
           await script({ github, context, core })
-
