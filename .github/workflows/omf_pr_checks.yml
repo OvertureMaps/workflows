@@ -7,7 +7,7 @@
 #
 # Designed to run as a GitHub Ruleset required workflow.
 #
-name: OMF PR Checks
+name: OMF PR Checks # zizmor: ignore[concurrency-limits]
 
 on:
   pull_request_target: # zizmor: ignore[dangerous-triggers]

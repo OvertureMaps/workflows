@@ -57,7 +57,7 @@ runs:
   using: composite
   steps:
     - name: Install s5cmd v${{ inputs.version }}
-      uses: peak/action-setup-s5cmd@bde462e7399c68b4a9b05549d90b0e7d5c95e60f
+      uses: peak/action-setup-s5cmd@bde462e7399c68b4a9b05549d90b0e7d5c95e60f # zizmor: ignore[stale-action-refs] — upstream has no releases or tags; main
       with:
         version: v${{ inputs.version }}
 
