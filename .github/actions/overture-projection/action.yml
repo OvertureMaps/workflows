@@ -260,6 +260,7 @@ runs:
         REPOSITORY: ${{ inputs['repository'] }}
       with:
         github-token: ${{ steps.context-token.outputs.token || inputs['github-token'] != '' && inputs['github-token'] || github.token }}
+        # zizmor: ignore[template-injection] -- standard GitHub Actions pattern
         script: |
           const script = require('${{ github.action_path }}/scripts/fetch-diff.js')
           await script({ github, context, core })
