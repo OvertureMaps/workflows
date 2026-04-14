@@ -77,7 +77,7 @@ on:
       pr_number:
         description: PR number to review
         required: true
-        type: number
+        type: string
       devex_ref:
         description: omf-devex ref to load skills from
         required: false
