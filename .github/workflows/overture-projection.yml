@@ -163,18 +163,26 @@ on:
         default: false
 
 permissions:
-  contents: read
-  pull-requests: write
-  issues: read
-  models: read
+  contents: read # checkout omf-devex skills
 
 jobs:
   overture-projection:
     name: Overture PRojection
     runs-on: ubuntu-slim
 
+    # One active run per PR; cancel in-progress if a new commit is pushed.
+    concurrency:
+      group: overture-projection-${{ github.event.pull_request.number || inputs.pr_number || github.run_id }}
+      cancel-in-progress: true
+
+    permissions:
+      pull-requests: write # post/update review comment
+      issues: read         # closingIssuesReferences GraphQL query
+      models: read         # GitHub Models API (not needed for anthropic provider)
+
     steps:
       - name: Run Overture PRojection
+        # zizmor: ignore[unpinned-uses] -- self-referential; SHA updated in a follow-up commit after action changes are committed
         uses: OvertureMaps/workflows/.github/actions/overture-projection@main
         with:
           always-skills: "pr-review"
@@ -188,5 +196,6 @@ jobs:
           max-output-tokens: ${{ github.event_name != 'pull_request' && inputs.max_output_tokens || '' }}
           dry-run: ${{ github.event_name == 'pull_request' && env.ACT == 'true' || inputs.dry_run == true || inputs.dry_run == 'true' || env.ACT == 'true' }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
+          # zizmor: ignore[secrets-outside-env] -- no deployment environment needed; these are org secrets for a review bot
           app-private-key: ${{ secrets.OVERTURE_PROJECTION_APP_PEM }}
           anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}

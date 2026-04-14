@@ -172,6 +172,9 @@ runs:
   steps:
 
     # -- Step 0a: Mask secrets so they never appear in logs --------------------
+    # zizmor: ignore[template-injection] -- intentional; ${{ inputs[...] }} expansion
+    # is required here because ::add-mask:: must see the literal value to register it.
+    # Using env vars would defeat the purpose — the mask command itself is what sets them.
     - name: Mask secrets
       shell: bash
       run: |
@@ -221,6 +224,7 @@ runs:
         sparse-checkout: skills
         sparse-checkout-cone-mode: true
         path: .omf-devex-skills
+        persist-credentials: false
         token: ${{ steps.context-token.outputs.token || inputs['github-token'] != '' && inputs['github-token'] || github.token }}
 
     # -- Step 1b: Load skills from disk ----------------------------------------
