@@ -136,7 +136,7 @@ Only skills with `surfaces: [pr-reviewer]` (or no `surfaces` field) are loaded. 
 - All other `pr-reviewer` skills are passed to the selection model with their `description`; the model picks which are relevant to the PR.
 - `context-files` are fetched after selection, so only selected skills pay the network cost.
 
-For full frontmatter field reference and authoring guidance see the [omf-devex README](../../../../README.md#skills).
+For full frontmatter field reference and authoring guidance see the [omf-devex README](https://github.com/OvertureMaps/omf-devex/blob/main/README.md#skills).
 
 ## Required workflow permissions
 
