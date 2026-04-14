@@ -1,0 +1,330 @@
+---
+name: Overture PRojection
+description: >
+  Posts an AI-generated code review comment on a pull request. Discovers
+  skills from OvertureMaps/omf-devex (including any context files they
+  reference in other org repos), selects which apply via a fast model,
+  then posts a structured review. Skills are fetched, selected, and applied
+  as discrete steps for maintainability.
+
+inputs:
+  always-skills:
+    description: >
+      Comma-separated skill names that are always included regardless of
+      model selection. Defaults to 'pr-review'.
+    required: false
+    default: pr-review
+  selection-model:
+    description: >-
+      Model ID used for skill selection (fast/cheap). When not set, defaults to
+      gpt-4.1-mini for github-models or claude-haiku-4-6 for anthropic.
+    required: false
+    default: ""
+  devex-ref:
+    description: Git ref of OvertureMaps/omf-devex to fetch skills from
+    required: false
+    default: main
+  model:
+    description: >-
+      Model ID used for the review. When not set, defaults automatically by
+      provider: gpt-4.1 (github-models) or claude-opus-4-6 (anthropic).
+      Mirror of GITHUB_MODELS_DEFAULT_MODEL / ANTHROPIC_DEFAULT_MODEL in defaults.js.
+    required: false
+    default: ""
+  model-provider:
+    description: >-
+      Model provider. 'github-models' (default) uses the GitHub Models endpoint
+      with the github-token. 'anthropic' calls the Anthropic Messages API
+      directly — set anthropic-api-key and use a Claude model ID (e.g.
+      claude-opus-4-6).
+    required: false
+    default: "github-models"
+  anthropic-api-key:
+    description: >-
+      Anthropic API key. Required when model-provider is 'anthropic'.
+      Pass as a secret: secrets.ANTHROPIC_API_KEY.
+    required: false
+    default: ""
+  max-output-tokens:
+    description: >-
+      Maximum tokens the model may generate in its response. Also subtracted
+      from the context window when computing how much room is left for the diff.
+      Increase for very long reviews; decrease to save cost.
+      When not set, defaults automatically by provider: 1500 (github-models) or
+      4096 (anthropic). Mirror of GITHUB_MODELS_MAX_OUTPUT_TOKENS /
+      ANTHROPIC_MAX_OUTPUT_TOKENS in defaults.js.
+    required: false
+    default: ""
+  max-input-tokens:
+    description: >-
+      Maximum tokens available for the full input prompt (system + user).
+      When not set, defaults automatically by provider: 6200 (github-models,
+      = 8000 context − 1500 output − 300 margin) or 190000 (anthropic,
+      = 200k context − 4096 output − ~6000 margin). Override only if using a
+      model with a different context window. Mirror of
+      GITHUB_MODELS_MAX_INPUT_TOKENS / ANTHROPIC_MAX_INPUT_TOKENS in defaults.js.
+    required: false
+    default: ""
+  github-token:
+    description: >
+      GitHub token. Must have pull-requests:write on the target repo (the
+      workflow repo by default, or the repository input if set),
+      models:read for GitHub Models API access, and read access to
+      OvertureMaps/omf-devex. Defaults to the workflow token.
+    required: false
+    default: ""
+  app-id:
+    description: >
+      GitHub App Client ID used to generate an installation token for reading
+      cross-repo context files referenced in skill frontmatter.
+      Defaults to the Overture PRojection app.
+    required: false
+    default: "Iv23liBMB2dC9UQJ5pHL" # https://github.com/organizations/OvertureMaps/settings/apps/overture-projection
+  app-private-key:
+    description: >
+      GitHub App private key used to generate an installation token for
+      cross-repo context file reads. Pass secrets.OVERTURE_PROJECTION_APP_PEM.
+      When omitted, falls back to github-token (cross-repo reads of private
+      repos will not work in that case).
+    required: false
+    default: ""
+  max-files:
+    description: Maximum number of changed files to include in the diff sent to the model
+    required: false
+    default: "20"
+  max-diff-chars:
+    description: >-
+      Fetch ceiling: maximum total characters of patch content to pull from the
+      GitHub API. Files are fetched in full (never truncated mid-diff); once
+      this ceiling is hit, remaining files are not fetched at all. The actual
+      context-window budget is computed dynamically in post-review based on the
+      real system-prompt size, so this is only a fetch guard against pulling
+      unbounded diffs from large PRs.
+    required: false
+    default: "100000"
+  max-context-file-chars:
+    description: >-
+      Hard cap (in characters) on each individual skill context file — the
+      cross-repo Markdown files declared via `context-files:` in skill
+      frontmatter. This does NOT affect the overall prompt context size.
+      When not set, the per-file limit is computed dynamically as 10% of the
+      input token budget (e.g. ~2 500 chars for github-models, ~76 000 chars
+      for anthropic). Set this to enforce a tighter ceiling regardless of the
+      token budget, e.g. to keep context files brief for cost reasons.
+    required: false
+    default: ""
+  ignore-files:
+    description: >-
+      Newline-separated list of filename patterns to exclude from the diff sent
+      to the model. Supports * wildcards, matched against the full file path and
+      the basename. Set to an empty string to disable all exclusions.
+    required: false
+    default: |
+      package-lock.json
+      yarn.lock
+      pnpm-lock.yaml
+      poetry.lock
+      Pipfile.lock
+      Gemfile.lock
+      composer.lock
+      Cargo.lock
+      go.sum
+      *.lock
+      *.snap
+  comment-mode:
+    description: >-
+      Controls how the review is posted. 'update' posts a single issue comment
+      the first time, then edits it in place on subsequent runs — keeps the PR
+      timeline clean (default). 'new' posts a fresh PR review on every run.
+    required: false
+    default: "update"
+  comment-tag:
+    description: >-
+      Unique identifier embedded as a hidden HTML comment (<!-- tag -->) used
+      to find and update the existing comment when comment-mode is 'update'.
+      Change this if you run multiple AI review actions on the same PR to
+      prevent them from overwriting each other. Defaults to 'overture-projection'.
+    required: false
+    default: "overture-projection"
+  pr-number:
+    description: >-
+      Pull request number to review. When not set, falls back to
+      context.payload.pull_request.number (available on pull_request events).
+      Required when triggering via workflow_dispatch.
+    required: false
+    default: ""
+  repository:
+    description: >-
+      Repository containing the PR to review, in owner/repo format.
+      Defaults to the repository the workflow is running in.
+      When set, github-token must have pull-requests:write on the target repo.
+    required: false
+    default: ""
+  dry-run:
+    description: >-
+      If true, print the review body to the log instead of posting a PR comment.
+      Useful for local testing with act.
+    required: false
+    default: "false"
+
+runs:
+  using: composite
+  steps:
+
+    # -- Step 0a: Mask secrets so they never appear in logs --------------------
+    # zizmor: ignore[template-injection] -- intentional; ${{ inputs[...] }} expansion
+    # is required here because ::add-mask:: must see the literal value to register it.
+    # Using env vars would defeat the purpose — the mask command itself is what sets them.
+    - name: Mask secrets
+      shell: bash
+      # zizmor: ignore[template-injection] -- intentional; must see literal value to mask it
+      run: |
+        if [ -n "${{ inputs['app-private-key'] }}" ]; then
+          echo "::add-mask::${{ inputs['app-private-key'] }}"
+        fi
+        if [ -n "${{ inputs['anthropic-api-key'] }}" ]; then
+          echo "::add-mask::${{ inputs['anthropic-api-key'] }}"
+        fi
+        if [ -n "${{ inputs['github-token'] }}" ]; then
+          echo "::add-mask::${{ inputs['github-token'] }}"
+        fi
+
+    # -- Step 0b: Resolve target repo name (bare, no owner prefix) -------------
+    # 'repository' input is owner/repo; the create-github-app-token 'repositories'
+    # input requires bare repo names. Falls back to the current repo.
+    - name: Resolve target repo name
+      id: target_repo
+      shell: bash
+      # zizmor: ignore[template-injection] -- must read owner/repo from caller; no env var alternative
+      run: |
+        repo="${{ inputs['repository'] != '' && inputs['repository'] || github.repository }}"
+        echo "name=${repo##*/}" >> "$GITHUB_OUTPUT"
+
+    # -- Step 0c: Generate an installation token for cross-repo context reads --
+    # Scoped to exactly two repos: omf-devex (skills + context files) and the
+    # target PR repo (posting the review). Avoids the default org-wide token.
+    - name: Generate context token
+      id: context-token
+      if: ${{ inputs['app-private-key'] != '' }}
+      uses: actions/create-github-app-token@f8d387b68d61c58ab83c6c016672934102569859 # v3.0.0
+      with:
+        app-id: ${{ inputs['app-id'] }}
+        private-key: ${{ inputs['app-private-key'] }}
+        owner: ${{ github.repository_owner }}
+        repositories: |
+          omf-devex
+          operating-procedures
+          ${{ steps.target_repo.outputs.name }}
+
+    # -- Step 1a: Checkout skills from omf-devex --------------------------------
+    # Sparse-checks out only the skills/ tree from omf-devex at a fixed ref.
+    - name: Checkout skills
+      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      with:
+        repository: OvertureMaps/omf-devex
+        ref: ${{ inputs['devex-ref'] }}
+        sparse-checkout: skills
+        sparse-checkout-cone-mode: true
+        path: .omf-devex-skills
+        persist-credentials: false
+        token: ${{ steps.context-token.outputs.token || inputs['github-token'] != '' && inputs['github-token'] || github.token }}
+
+    # -- Step 1b: Load skills from disk ----------------------------------------
+    # Reads SKILL.md files, parses frontmatter, filters to pr-reviewer surface.
+    # Stores raw content + context-file refs only — no fetching yet.
+    # Context files are fetched in Step 3b, after selection, so only selected
+    # skills pay the network cost.
+    - name: Load skills
+      id: fetch-skills
+      uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7.1.0
+      env:
+        SKILLS_DIR: ${{ format('{0}/.omf-devex-skills/skills', github.workspace) }}
+      with:
+        github-token: ${{ steps.context-token.outputs.token || inputs['github-token'] != '' && inputs['github-token'] || github.token }}
+        # zizmor: ignore[template-injection] -- standard GitHub Actions pattern for requiring local scripts
+        script: |
+          const script = require('${{ github.action_path }}/scripts/load-skills.js')
+          await script({ github, context, core })
+
+    # -- Step 2: Fetch PR metadata and diff ------------------------------------
+    # Retrieves PR title, body, changed files, and patches in one pass.
+    # Writes pr.json to RUNNER_TEMP. Outputs changed-paths for the next step.
+    - name: Fetch PR diff
+      id: fetch-diff
+      uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7.1.0
+      env:
+        MAX_FILES: ${{ inputs['max-files'] }}
+        MAX_DIFF_CHARS: ${{ inputs['max-diff-chars'] }}
+        IGNORE_FILES: ${{ inputs['ignore-files'] }}
+        PR_NUMBER: ${{ inputs['pr-number'] }}
+        REPOSITORY: ${{ inputs['repository'] }}
+      with:
+        github-token: ${{ steps.context-token.outputs.token || inputs['github-token'] != '' && inputs['github-token'] || github.token }}
+        # zizmor: ignore[template-injection] -- standard GitHub Actions pattern
+        script: |
+          const script = require('${{ github.action_path }}/scripts/fetch-diff.js')
+          await script({ github, context, core })
+
+    # -- Step 3: Select applicable skills --------------------------------------
+    # Uses a fast/cheap model to decide which optional skills apply, based on
+    # the PR context and each skill's frontmatter description. Always-skills
+    # bypass this step. Outputs selected skill names as a JSON array string.
+    - name: Select skills
+      id: select-skills
+      uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7.1.0
+      env:
+        AI_TOKEN: ${{ inputs['model-provider'] == 'anthropic' && inputs['anthropic-api-key'] || inputs['github-token'] != '' && inputs['github-token'] || github.token }}
+        MODEL_PROVIDER: ${{ inputs['model-provider'] }}
+        ALWAYS_SKILLS: ${{ inputs['always-skills'] }}
+        SELECTION_MODEL_ID: ${{ inputs['selection-model'] }}
+        CHANGED_PATHS: ${{ steps.fetch-diff.outputs.changed-paths }}
+      with:
+        # zizmor: ignore[template-injection] -- standard pattern
+        script: |
+          const script = require('${{ github.action_path }}/scripts/select-skills.js')
+          await script({ github, context, core })
+
+    # -- Step 3b: Fetch context files for selected skills only -----------------
+    # Now that we know which skills were selected, fetch only their context-files.
+    # Skipped entirely if no selected skill has context-files declared.
+    # Per-file char limit is computed dynamically from MAX_INPUT_TOKENS (10% of
+    # the token budget), optionally capped by MAX_CONTEXT_FILE_CHARS_OVERRIDE.
+    - name: Fetch context files
+      id: fetch-context
+      uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7.1.0
+      env:
+        CONTEXT_TOKEN: ${{ steps.context-token.outputs.token || inputs['github-token'] != '' && inputs['github-token'] || github.token }}
+        SELECTED_SKILLS: ${{ steps.select-skills.outputs.selected }}
+        MODEL_PROVIDER: ${{ inputs['model-provider'] }}
+        MAX_INPUT_TOKENS: ${{ inputs['max-input-tokens'] }}
+        MAX_CONTEXT_FILE_CHARS_OVERRIDE: ${{ inputs['max-context-file-chars'] }}
+      with:
+        github-token: ${{ steps.context-token.outputs.token || inputs['github-token'] != '' && inputs['github-token'] || github.token }}
+        # zizmor: ignore[template-injection] -- standard pattern
+        script: |
+          const script = require('${{ github.action_path }}/scripts/fetch-context.js')
+          await script({ github, context, core })
+
+    # -- Step 4: Compose prompt and post review --------------------------------
+    # Reads skills.json and pr.json, builds the system prompt from selected
+    # skills (in order), calls the review model, and posts a PR review comment.
+    - name: Post review
+      uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7.1.0
+      env:
+        AI_TOKEN: ${{ inputs['model-provider'] == 'anthropic' && inputs['anthropic-api-key'] || inputs['github-token'] != '' && inputs['github-token'] || github.token }}
+        MODEL_ID: ${{ inputs.model }}
+        MODEL_PROVIDER: ${{ inputs['model-provider'] }}
+        MAX_OUTPUT_TOKENS: ${{ inputs['max-output-tokens'] }}
+        MAX_INPUT_TOKENS: ${{ inputs['max-input-tokens'] }}
+        SELECTED_SKILLS: ${{ steps.select-skills.outputs.selected }}
+        COMMENT_MODE: ${{ inputs['comment-mode'] }}
+        COMMENT_TAG: ${{ inputs['comment-tag'] }}
+        DRY_RUN: ${{ inputs['dry-run'] }}
+        PR_NUMBER: ${{ inputs['pr-number'] }}
+        REPOSITORY: ${{ inputs['repository'] }}
+      with:
+        github-token: ${{ steps.context-token.outputs.token || inputs['github-token'] != '' && inputs['github-token'] || github.token }}
+        # zizmor: ignore[template-injection] -- standard pattern
+        script: |
+          const script = require('${{ github.action_path }}/scripts/post-review.js')
+          await script({ github, context, core })
