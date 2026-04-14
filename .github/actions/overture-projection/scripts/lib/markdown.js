@@ -24,7 +24,7 @@
  * // => '# Hello\n\nWorld'
  */
 function compressMarkdown(text) {
-  const stripped   = text.replace(/^---\n[\s\S]*?\n---\n?/, '');
+  const stripped   = text.replace(/^---\r?\n[\s\S]*?\r?\n---(?:\r?\n)?/, '');
   const noComments = stripped.replace(/<!--[\s\S]*?-->/g, '');
   return noComments
     .split('\n')

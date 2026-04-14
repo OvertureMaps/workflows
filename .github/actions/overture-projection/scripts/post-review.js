@@ -14,7 +14,7 @@
  *   MAX_OUTPUT_TOKENS — max tokens the model may generate (default varies by provider)
  *   MAX_INPUT_TOKENS  — max input tokens available (default varies by provider; see defaults.js)
  *   SELECTED_SKILLS   — JSON array of skill names from Step 3
- *   COMMENT_MODE    — 'update' | 'new' (default 'new')
+ *   COMMENT_MODE    — 'update' (default) | 'new'
  *   COMMENT_TAG     — HTML marker for update-mode comment identification
  *   DRY_RUN         — 'true' to skip posting and print instead
  *   PR_NUMBER       — PR number override (falls back to event payload)
@@ -136,6 +136,10 @@ module.exports = async ({ github, context, core }) => {
 
   const { owner, repo } = resolveRepo(process.env.REPOSITORY, context.repo);
   const prNumber        = resolvePrNumber(context.payload.pull_request?.number, process.env.PR_NUMBER);
+  if (prNumber === null) {
+    core.setFailed('Could not resolve PR number from context or PR_NUMBER env var');
+    return;
+  }
   const commentMode     = process.env.COMMENT_MODE || 'new';
 
   /**

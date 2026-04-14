@@ -25,7 +25,7 @@ module.exports = async ({ core }) => {
 
   const skillsDir = process.env.SKILLS_DIR;
 
-  if (!fs.existsSync(skillsDir)) {
+  if (!skillsDir || !skillsDir.trim() || !fs.existsSync(skillsDir)) {
     core.warning(`⚠️ Skills directory not found: ${skillsDir} — no skills will be loaded.`);
     fs.writeFileSync(process.env.RUNNER_TEMP + '/ai-review-skills.json', JSON.stringify([]));
     return;

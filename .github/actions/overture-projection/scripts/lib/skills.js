@@ -39,7 +39,7 @@
  * // => { description: 'Checks containers', contextFiles: [], surfaces: ['pr-reviewer'] }
  */
 function parseFrontmatter(raw) {
-  const fmMatch = raw.match(/^---\n([\s\S]*?)\n---/);
+  const fmMatch = raw.match(/^---\r?\n([\s\S]*?)\r?\n---/);
   if (!fmMatch) return { description: '', contextFiles: [], surfaces: null };
   const fm = fmMatch[1];
 

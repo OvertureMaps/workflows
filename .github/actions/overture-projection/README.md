@@ -9,7 +9,7 @@ Supports [GitHub Models](https://docs.github.com/en/github-models) (default) and
 1. **Load skills** — sparse-checkouts `omf-devex/skills/`, parses frontmatter, filters to `pr-reviewer` surface. Raw content is stored; nothing is fetched yet.
 2. **Fetch PR diff** — title, body, branch refs, closing issues (GraphQL), and changed file patches up to `max-diff-chars`.
 3. **Select skills** — a fast/cheap model reads skill descriptions and changed file paths, picks which optional skills apply, and logs its reasoning. `always-skills` bypass this step entirely.
-4. **Fetch context files** — only for selected skills; fetched in parallel via the GitHub App token, compressed, and capped at 5,000 chars each.
+4. **Fetch context files** — only for selected skills; fetched in parallel via the GitHub App token, compressed, and capped per file at `max-context-file-chars` (defaults to 10% of the input token budget).
 5. **Post review** — builds system prompt from selected skills + context, trims the diff to the remaining token budget, calls the review model, and posts or updates a PR comment.
 
 ## Recipes
@@ -26,7 +26,7 @@ permissions:
   models: read
 
 steps:
-  - uses: OvertureMaps/omf-devex/.github/actions/overture-projection@main
+  - uses: OvertureMaps/workflows/.github/actions/overture-projection@030d1cf86ff0013daa6f41ba0073cf048ec2d494 # reusable-PRojection-workflow
     with:
       github-token: ${{ secrets.GITHUB_TOKEN }}
       app-private-key: ${{ secrets.OVERTURE_PROJECTION_APP_PEM }}
@@ -52,7 +52,7 @@ permissions:
   issues: read
 
 steps:
-  - uses: OvertureMaps/omf-devex/.github/actions/overture-projection@main
+  - uses: OvertureMaps/workflows/.github/actions/overture-projection@030d1cf86ff0013daa6f41ba0073cf048ec2d494 # reusable-PRojection-workflow
     with:
       model-provider: anthropic
       model: claude-opus-4-6
@@ -100,7 +100,6 @@ Note: `models: read` permission is not required when using Anthropic.
 | --- | --- | --- |
 | `always-skills` | `pr-review` | Comma-separated skill names included on every run, bypassing model selection |
 | `devex-ref` | `main` | Git ref of `omf-devex` to load skills from |
-| `skills-dir` | _(empty)_ | Local path to an already-checked-out skills directory; skips the omf-devex checkout |
 | `max-files` | `20` | Maximum number of changed files to fetch from the GitHub API |
 | `max-diff-chars` | `100000` | Fetch ceiling for diff content. The actual amount sent to the model is computed dynamically based on the remaining token budget after skills and metadata |
 | `max-context-file-chars` | _(default)_ | Hard cap per individual skill context file (the cross-repo files declared via `context-files:` in skill frontmatter — not the overall prompt context). Defaults to 10% of the input token budget (~2 500 chars for github-models, ~76 000 for anthropic). Set this to enforce a tighter ceiling regardless of token budget |

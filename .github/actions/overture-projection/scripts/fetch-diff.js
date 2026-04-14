@@ -11,12 +11,13 @@
  *   4. Repository licence (best-effort; null if unavailable)
  *
  * Changed files are filtered against IGNORE_FILES patterns, then whole files
- * are dropped (largest-first) once the total diff character budget is exhausted.
+ * are dropped once the total diff character budget is exhausted (in API order;
+ * later files may still be included if they are smaller than remaining budget).
  * No patch is ever truncated mid-diff; the model only sees complete patches.
  *
  * Env vars consumed:
  *   MAX_FILES       — max number of changed files to include (default 20)
-  *   MAX_DIFF_CHARS  — fetch ceiling: max chars of patch content to pull from GitHub API (default 100000)
+ *   MAX_DIFF_CHARS  — fetch ceiling: max chars of patch content to pull from GitHub API (default 100000)
  *   IGNORE_FILES    — newline-separated glob patterns for files to skip
  *   PR_NUMBER       — PR number override (falls back to event payload)
  *   REPOSITORY      — target repo in owner/repo format (falls back to context)

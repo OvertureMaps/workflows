@@ -218,8 +218,6 @@ describe('callChatCompletion', () => {
 
   it('sends Bearer auth to GitHub Models', async () => {
     let calledHeaders;
-    globalThis.fetch = async (_url, opts) => { calledHeaders = JSON.parse(opts.body); return fakeFetchResp(200, GH_SUCCESS); };
-    // headers are in opts, body has model — check Authorization separately
     globalThis.fetch = async (_url, opts) => {
       calledHeaders = opts.headers;
       return fakeFetchResp(200, GH_SUCCESS);
