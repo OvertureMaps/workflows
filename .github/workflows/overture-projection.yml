@@ -1,0 +1,256 @@
+---
+# Overture PRojection — AI PR review workflow.
+#
+# Triggers automatically on pull_request events in this repo, manually via
+# workflow_dispatch to review any PR, or as a reusable workflow from other repos.
+#
+# ── Local testing with act ────────────────────────────────────────────────────
+#
+# Use workflow_dispatch so --input flags are honoured. Do NOT pass -e with a
+# pull_request event payload — act ignores --input when the event file contains
+# a different event type. All PR targeting is done via --input pr_number and
+# --input repository instead.
+#
+# dry-run is set automatically (ACT=true env var is set by act).
+#
+#   GitHub Models — PowerShell:
+#     act workflow_dispatch `
+#       -s GITHUB_TOKEN=$(gh auth token) `
+#       -P ubuntu-slim=catthehacker/ubuntu:act-latest `
+#       --input pr_number=<N> `
+#       --input repository=OvertureMaps/<repo>
+#
+#   GitHub Models — bash/zsh:
+#     act workflow_dispatch \
+#       -s GITHUB_TOKEN=$(gh auth token) \
+#       -P ubuntu-slim=catthehacker/ubuntu:act-latest \
+#       --input pr_number=<N> \
+#       --input repository=OvertureMaps/<repo>
+#
+#   Anthropic — PowerShell:
+#     act workflow_dispatch `
+#       -s GITHUB_TOKEN=$(gh auth token) `
+#       -s ANTHROPIC_API_KEY=sk-ant-... `
+#       -P ubuntu-slim=catthehacker/ubuntu:act-latest `
+#       --input pr_number=<N> `
+#       --input repository=OvertureMaps/<repo> `
+#       --input model_provider=anthropic
+#       # model, max_input_tokens, max_output_tokens, selection_model all default
+#       # automatically for anthropic (claude-opus-4-6, 190000, 4096, claude-haiku-4-6)
+#
+#   Anthropic — bash/zsh:
+#     act workflow_dispatch \
+#       -s GITHUB_TOKEN=$(gh auth token) \
+#       -s ANTHROPIC_API_KEY=sk-ant-... \
+#       -P ubuntu-slim=catthehacker/ubuntu:act-latest \
+#       --input pr_number=<N> \
+#       --input repository=OvertureMaps/<repo> \
+#       --input model_provider=anthropic
+#       # model, max_input_tokens, max_output_tokens, selection_model all default
+#       # automatically for anthropic (claude-opus-4-6, 190000, 4096, claude-haiku-4-6)
+#
+# ── Manual trigger (no act) ───────────────────────────────────────────────────
+#
+#   gh workflow run overture-projection.yml \
+#     -f pr_number=<N> \
+#     -f dry_run=true
+#
+# ── Required permissions ──────────────────────────────────────────────────────
+#
+# Token scopes: repo (read), pull-requests (write), issues (read), models (read)
+# Org secret OVERTURE_PROJECTION_APP_PEM used for cross-repo context file reads.
+#
+# Overture PRojection — AI PR review workflow.
+#
+# Triggers automatically on pull_request events, or manually via workflow_dispatch
+# to review any open PR by number.
+#
+# ── Local testing with act ────────────────────────────────────────────────────
+#
+# Use workflow_dispatch so --input flags are honoured. Do NOT pass -e with a
+# pull_request event payload — act ignores --input when the event file contains
+# a different event type. All PR targeting is done via --input pr_number and
+# --input repository instead.
+#
+# dry-run is set automatically (ACT=true env var is set by act).
+#
+#   GitHub Models — PowerShell:
+#     act workflow_dispatch `
+#       -s GITHUB_TOKEN=$(gh auth token) `
+#       -P ubuntu-slim=catthehacker/ubuntu:act-latest `
+#       --input pr_number=<N> `
+#       --input repository=OvertureMaps/<repo>
+#
+#   GitHub Models — bash/zsh:
+#     act workflow_dispatch \
+#       -s GITHUB_TOKEN=$(gh auth token) \
+#       -P ubuntu-slim=catthehacker/ubuntu:act-latest \
+#       --input pr_number=<N> \
+#       --input repository=OvertureMaps/<repo>
+#
+#   Anthropic — PowerShell:
+#     act workflow_dispatch `
+#       -s GITHUB_TOKEN=$(gh auth token) `
+#       -s ANTHROPIC_API_KEY=sk-ant-... `
+#       -P ubuntu-slim=catthehacker/ubuntu:act-latest `
+#       --input pr_number=<N> `
+#       --input repository=OvertureMaps/<repo> `
+#       --input model_provider=anthropic
+#       # model, max_input_tokens, max_output_tokens, selection_model all default
+#       # automatically for anthropic (claude-opus-4-6, 190000, 4096, claude-haiku-4-6)
+#
+#   Anthropic — bash/zsh:
+#     act workflow_dispatch \
+#       -s GITHUB_TOKEN=$(gh auth token) \
+#       -s ANTHROPIC_API_KEY=sk-ant-... \
+#       -P ubuntu-slim=catthehacker/ubuntu:act-latest \
+#       --input pr_number=<N> \
+#       --input repository=OvertureMaps/<repo> \
+#       --input model_provider=anthropic
+#       # model, max_input_tokens, max_output_tokens, selection_model all default
+#       # automatically for anthropic (claude-opus-4-6, 190000, 4096, claude-haiku-4-6)
+#
+# ── Manual trigger (no act) ───────────────────────────────────────────────────
+#
+#   gh workflow run overture-projection.yml \
+#     -f pr_number=<N> \
+#     -f dry_run=true
+#
+# ── Required permissions ──────────────────────────────────────────────────────
+#
+# Token scopes: repo (read), pull-requests (write), issues (read), models (read)
+# Org secret OVERTURE_PROJECTION_APP_PEM used for cross-repo context file reads.
+#
+name: Overture PRojection
+
+on:
+  # Trigger on real PRs in this repo
+  pull_request:
+    types: [opened, synchronize]
+
+  # Reusable workflow for calling from other repositories
+  workflow_call:
+    inputs:
+      repository:
+        description: "Target repo in owner/repo format"
+        required: true
+        type: string
+      pr_number:
+        description: PR number to review
+        required: true
+        type: number
+      devex_ref:
+        description: omf-devex ref to load skills from
+        required: false
+        type: string
+        default: main
+      model:
+        description: "Review model ID (e.g. gpt-4.1 or claude-opus-4-6). Defaults automatically by provider when not set."
+        required: false
+        type: string
+        default: ""
+      selection_model:
+        description: "Skill selection model ID. Defaults automatically by provider when not set."
+        required: false
+        type: string
+        default: ""
+      model_provider:
+        description: "'github-models' (default) or 'anthropic'"
+        required: false
+        type: string
+        default: github-models
+      max_input_tokens:
+        description: "Max input tokens. Defaults automatically by provider when not set (6200 for github-models, 190000 for anthropic)."
+        required: false
+        type: string
+        default: ""
+      max_output_tokens:
+        description: "Max tokens the model may generate. Defaults automatically by provider when not set (1500 for github-models, 4096 for anthropic)."
+        required: false
+        type: string
+        default: ""
+      dry_run:
+        description: Print composed prompt without posting a review comment
+        required: false
+        type: boolean
+        default: false
+    secrets:
+      GITHUB_TOKEN:
+        description: GitHub token with repo, pull-requests, issues, and models scopes
+        required: true
+      OVERTURE_PROJECTION_APP_PEM:
+        description: App private key for cross-repo context file reads
+        required: true
+      ANTHROPIC_API_KEY:
+        description: Anthropic API key (required only if using anthropic model_provider)
+        required: false
+
+  # Manual trigger: supply any PR number from this repo to test against
+  workflow_dispatch:
+    inputs:
+      repository:
+        description: "Target repo in owner/repo format (default: this repo)"
+        required: false
+        default: ""
+      pr_number:
+        description: PR number to review
+        required: true
+        type: number
+      devex_ref:
+        description: omf-devex ref to load skills from
+        required: false
+        default: main
+      model:
+        description: "Review model ID (e.g. gpt-4.1 or claude-opus-4-6). Defaults automatically by provider when not set."
+        required: false
+        default: ""
+      selection_model:
+        description: "Skill selection model ID. Defaults automatically by provider when not set."
+        required: false
+        default: ""
+      model_provider:
+        description: "'github-models' (default) or 'anthropic'"
+        required: false
+        default: github-models
+      max_input_tokens:
+        description: "Max input tokens. Defaults automatically by provider when not set (6200 for github-models, 190000 for anthropic)."
+        required: false
+        default: ""
+      max_output_tokens:
+        description: "Max tokens the model may generate. Defaults automatically by provider when not set (1500 for github-models, 4096 for anthropic)."
+        required: false
+        default: ""
+      dry_run:
+        description: Print composed prompt without posting a review comment
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: read
+  models: read
+
+jobs:
+  overture-projection:
+    name: Overture PRojection
+    runs-on: ubuntu-slim
+
+    steps:
+      - name: Run Overture PRojection
+        uses: OvertureMaps/omf-devex/.github/actions/overture-projection@main
+        with:
+          always-skills: "pr-review"
+          repository: ${{ inputs.repository || github.event.repository.full_name }}
+          pr-number: ${{ inputs.pr_number || github.event.pull_request.number }}
+          devex-ref: ${{ inputs.devex_ref || 'main' }}
+          model: ${{ inputs.model }}
+          selection-model: ${{ inputs.selection_model }}
+          model-provider: ${{ inputs.model_provider || 'github-models' }}
+          max-input-tokens: ${{ inputs.max_input_tokens }}
+          max-output-tokens: ${{ inputs.max_output_tokens }}
+          dry-run: ${{ inputs.dry_run == true || inputs.dry_run == 'true' || env.ACT == 'true' }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          app-private-key: ${{ secrets.OVERTURE_PROJECTION_APP_PEM }}
+          anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
