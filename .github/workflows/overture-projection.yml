@@ -168,7 +168,7 @@ permissions:
 jobs:
   overture-projection:
     name: Overture PRojection
-    runs-on: ubuntu-slim
+    runs-on: ubuntu-latest
 
     # One active run per PR; cancel in-progress if a new commit is pushed.
     concurrency:
