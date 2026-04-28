@@ -13,7 +13,7 @@
 #
 name: OMF Security Checks
 
-on:
+on: # zizmor: ignore[concurrency-limits]
   pull_request:
     types: [opened, reopened, synchronize]
 
