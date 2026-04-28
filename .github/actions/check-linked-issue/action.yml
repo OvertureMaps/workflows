@@ -27,6 +27,10 @@ inputs:
     description: Skip the linked issue check when the PR author is dependabot[bot]
     required: false
     default: "true"
+  ignoreOverturePullRequester:
+    description: Skip the linked issue check when the PR author is overture-pull-requester[bot]
+    required: false
+    default: "true"
 
 runs:
   using: composite
@@ -59,9 +63,15 @@ runs:
           const { owner, repo } = context.repo;
           const minimumLinkedIssues = parseInt(core.getInput('minimumLinkedIssues')) || 1;
           const ignoreDependabot = core.getInput('ignoreDependabot') !== 'false';
+          const ignoreOverturePullRequester = core.getInput('ignoreOverturePullRequester') !== 'false';
 
           if (ignoreDependabot && context.payload.pull_request.user.login === 'dependabot[bot]') {
             core.info('⏭️ Skipping linked issue check for dependabot PR.');
+            return;
+          }
+
+          if (ignoreOverturePullRequester && context.payload.pull_request.user.login === 'overture-pull-requester[bot]') {
+            core.info('⏭️ Skipping linked issue check for overture-pull-requester PR.');
             return;
           }
 

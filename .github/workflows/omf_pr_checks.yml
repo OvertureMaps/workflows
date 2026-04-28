@@ -40,6 +40,6 @@ jobs:
       statuses: write # to update commit status checks
     steps:
       - name: Check for linked issue
-        uses: OvertureMaps/workflows/.github/actions/check-linked-issue@check-linked-issue-v1 # zizmor: ignore[unpinned-uses]
+        uses: OvertureMaps/workflows/.github/actions/check-linked-issue@check-linked-issue-v2 # zizmor: ignore[unpinned-uses]
         with:
           privateKey: ${{ secrets.CHECK_LINKED_ISSUE_APP_PEM }}
