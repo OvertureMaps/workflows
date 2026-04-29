@@ -33,7 +33,6 @@ jobs:
   check-linked-issue:
     name: issue
     runs-on: ubuntu-latest
-    environment: check-linked-issue-app
     permissions:
       contents: none # no repository content access needed
       pull-requests: read # to query PR metadata and closing issue references
