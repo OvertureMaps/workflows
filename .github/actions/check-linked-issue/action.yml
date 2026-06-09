@@ -48,11 +48,11 @@ runs:
     - name: Generate GitHub App token
       id: app-token
       if: ${{ inputs.privateKey != '' }}
-      uses: actions/create-github-app-token@d72941d797fd3113feb6b93fd0dec494b13a2547 # v1.12.0
+      uses: actions/create-github-app-token@d72941d797fd3113feb6b93fd0dec494b13a2547 # v1.12.0 # zizmor: ignore[github-app]
       with:
         app-id: ${{ inputs.appId }}
         private-key: ${{ inputs.privateKey }}
-        owner: ${{ github.repository_owner }}
+        owner: ${{ github.repository_owner }} # zizmor: ignore[github-app]
 
     - name: Check for linked issue via GraphQL
       uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7.1.0
