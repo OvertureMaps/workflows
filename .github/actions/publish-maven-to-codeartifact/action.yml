@@ -10,7 +10,7 @@ inputs:
     required: true
   aws-region:
     description: AWS region where CodeArtifact is hosted
-    required: true
+    required: false
     default: us-west-2
   codeartifact-domain:
     description: CodeArtifact domain name

@@ -89,9 +89,16 @@ already exists.
 
 ### Prerequisites
 
-`setup-codeartifact` must have been called earlier in the same job. This action
-has no internal authentication step — it relies on the AWS credentials and
-`~/.m2/settings.xml` that `setup-codeartifact` configures.
+This action neither authenticates nor installs a toolchain, so the job must
+provide both before calling it:
+
+- **A JDK + Maven on the runner.** The action invokes `mvn deploy:deploy-file`,
+  so `mvn` must be on `PATH` — typically via `actions/setup-java` (with
+  `distribution`/`java-version`), which also provisions Maven. GitHub-hosted
+  runners include Maven by default; minimal or self-hosted runners may not.
+- **`setup-codeartifact` called earlier in the same job.** This action has no
+  internal authentication step — it relies on the AWS credentials and
+  `~/.m2/settings.xml` that `setup-codeartifact` configures.
 
 ## Explanation
 
@@ -106,8 +113,9 @@ are safe and cheap. Only missing versions are fetched and deployed via
 
 `jar-url` and `jar-path` are mutually exclusive. With `jar-url`, the JAR is
 downloaded to `_downloaded.jar` and published; with `jar-path`, the existing
-file is published in place. Supplying neither (for a not-yet-mirrored version)
-leaves nothing to deploy, so always provide exactly one.
+file is published in place. When the version is not yet mirrored, a validation
+step enforces that exactly one of the two is provided — supplying neither or
+both fails fast with a clear error rather than a confusing Maven failure.
 
 ### Why it has no auth step
 

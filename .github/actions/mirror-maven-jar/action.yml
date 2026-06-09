@@ -66,6 +66,22 @@ runs:
           echo "exists=false" >> "$GITHUB_OUTPUT"
         fi
 
+    - name: Validate JAR source inputs
+      if: steps.check.outputs.exists == 'false'
+      shell: bash
+      env:
+        JAR_URL: ${{ inputs.jar-url }}
+        JAR_PATH: ${{ inputs.jar-path }}
+      run: |
+        if [ -n "$JAR_URL" ] && [ -n "$JAR_PATH" ]; then
+          echo "Error: provide only one of jar-url or jar-path, not both." >&2
+          exit 1
+        fi
+        if [ -z "$JAR_URL" ] && [ -z "$JAR_PATH" ]; then
+          echo "Error: version is not yet mirrored; provide exactly one of jar-url or jar-path." >&2
+          exit 1
+        fi
+
     - name: Download JAR from remote URL
       if: steps.check.outputs.exists == 'false' && inputs.jar-url != ''
       shell: bash

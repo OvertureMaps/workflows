@@ -102,7 +102,9 @@ step in the same job resolve or deploy artifacts without bespoke setup.
 
 ### The token boundary
 
-The authorization token is masked in logs and written to `$GITHUB_ENV` so the
-generated `settings.xml` can reference it. Because `$GITHUB_ENV` is readable by
-all subsequent steps in the job, treat the runner as trusted for the duration of
-the job and call this action only in jobs you control.
+The authorization token is masked in logs and passed from the token step to the
+settings step via a step output (not `$GITHUB_ENV`), then embedded into the
+generated `~/.m2/settings.xml`. Keeping it out of `$GITHUB_ENV` means it is not
+exposed as an environment variable to later steps — but `settings.xml` itself is
+readable by any subsequent step in the job, so still treat the runner as trusted
+for the duration of the job and call this action only in jobs you control.

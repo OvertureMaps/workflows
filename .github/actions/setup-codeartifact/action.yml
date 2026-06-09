@@ -10,7 +10,7 @@ inputs:
     required: true
   aws-region:
     description: AWS region where CodeArtifact is hosted
-    required: true
+    required: false
     default: us-west-2
   codeartifact-domain:
     description: CodeArtifact domain name
@@ -54,7 +54,8 @@ runs:
       id: token
       shell: bash
       # Token is passed to the next step via a masked step output rather than
-      # $GITHUB_ENV, which avoids exposing it to unrelated steps in the job.
+      # $GITHUB_ENV, so it is not exposed as an env var to later steps. It is
+      # still embedded into ~/.m2/settings.xml, so the runner must be trusted.
       env:
         CODEARTIFACT_DOMAIN: ${{ inputs.codeartifact-domain }}
         CODEARTIFACT_DOMAIN_OWNER: ${{ inputs.codeartifact-domain-owner }}
