@@ -35,6 +35,15 @@ inputs:
       in a subdirectory.
     required: false
     default: "."
+  commit:
+    description: >
+      Commit SHA recorded as `build.commit` in the JAR manifest. Defaults to the
+      checked-out workspace HEAD (`git rev-parse HEAD`), which matches the tree
+      actually built — unlike `github.sha`, which is the merge-ref SHA on
+      `pull_request` events. Override only if the build tree is not a git
+      checkout.
+    required: false
+    default: ""
 
 runs:
   using: "composite"
@@ -76,10 +85,16 @@ runs:
         CODEARTIFACT_REPO_URL: "https://${{ inputs.codeartifact-domain }}-${{ inputs.codeartifact-domain-owner }}.d.codeartifact.${{ inputs.aws-region }}.amazonaws.com/maven/${{ inputs.codeartifact-repository }}/"
         BUILD_ENV: ${{ inputs.version != '' && 'dev' || 'release' }}
         BUILD_BRANCH: ${{ github.ref_name }}
-        BUILD_COMMIT: ${{ github.sha }}
+        COMMIT_OVERRIDE: ${{ inputs.commit }}
         WORKFLOW_RUN_ID: ${{ github.run_id }}
         WORKFLOW_RUN_NUMBER: ${{ github.run_number }}
       run: |
+        # Default build.commit to the checked-out HEAD so the manifest matches the
+        # tree actually built. On pull_request, github.sha is the merge-ref SHA.
+        BUILD_COMMIT="$COMMIT_OVERRIDE"
+        if [ -z "$BUILD_COMMIT" ]; then
+          BUILD_COMMIT=$(git rev-parse HEAD)
+        fi
         mvn clean deploy -ntp \
           -DaltDeploymentRepository="$CODEARTIFACT_DOMAIN::$CODEARTIFACT_REPO_URL" \
           -Dbuild.branch="$BUILD_BRANCH" \

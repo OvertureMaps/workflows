@@ -62,6 +62,7 @@ Set `version` to publish a dev-named artifact. The pom version is overridden via
 - `codeartifact-repository` (**required**): CodeArtifact repository name.
 - `version` (optional): Artifact version override. When set, the pom version is overridden via `mvn versions:set` and the project is built with dev naming (`-Denv=dev`). When empty (default), the project's release version is published unchanged (`-Denv=release`).
 - `working-directory` (optional): Directory containing the Maven project (its `pom.xml` and `.java-version`). Defaults to the repository root (`.`). Set this to publish a project that lives in a subdirectory.
+- `commit` (optional): Commit SHA recorded as `build.commit` in the JAR manifest. Defaults to the checked-out workspace HEAD (`git rev-parse HEAD`), which matches the tree actually built — unlike `github.sha`, which is the merge-ref SHA on `pull_request` events. Override only if the build tree is not a git checkout.
 
 ### Outputs
 
@@ -81,8 +82,11 @@ The assumed IAM role must allow `codeartifact:GetAuthorizationToken`,
 
 ### Requirements
 
-- A `.java-version` file at the repository root (consumed by `actions/setup-java`).
+- A `.java-version` file in the `working-directory` (consumed by `actions/setup-java`).
 - A Maven build that produces a `*-shaded.jar` under `target/`.
+- A git checkout (the default `actions/checkout` state) so `build.commit` can
+  default to the workspace HEAD. Pass the `commit` input if the tree is not a
+  git checkout.
 
 ## Explanation
 
@@ -94,6 +98,15 @@ The action runs four phases in one job step: JDK setup (Temurin, version from
 supplied, then `mvn clean deploy` with build provenance properties
 (`build.branch`, `build.commit`, `workflow.run_id`, `workflow.run_number`). Tests
 are skipped during deploy; run them in a separate CI step.
+
+### Commit provenance
+
+`build.commit` defaults to the checked-out workspace HEAD (`git rev-parse HEAD`),
+not `github.sha`. On `pull_request` events `github.sha` is the ephemeral
+merge-ref SHA, which diverges from the commit a caller actually checked out
+(e.g. `pull_request.head.sha`). Deriving it from HEAD keeps the manifest's commit
+in lock-step with the built tree regardless of the caller's checkout strategy;
+pass the `commit` input to override.
 
 ### Release vs dev publishing
 
