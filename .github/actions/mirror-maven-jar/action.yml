@@ -1,0 +1,96 @@
+name: Mirror Public JAR to CodeArtifact
+description: >
+  Mirrors a single pre-built public JAR into AWS CodeArtifact, skipping if the
+  version already exists. Supports downloading from a remote URL or using a
+  local file.
+  Prerequisite: setup-codeartifact must have been called in the same job to
+  configure AWS credentials and Maven settings.
+
+inputs:
+  group-id:
+    description: Maven groupId (e.g. com.googlecode.libphonenumber)
+    required: true
+  artifact-id:
+    description: Maven artifactId (e.g. libphonenumber)
+    required: true
+  version:
+    description: Maven version to mirror (e.g. 8.13.48)
+    required: true
+  jar-url:
+    description: Remote URL to download the JAR from (mutually exclusive with jar-path)
+    required: false
+    default: ""
+  jar-path:
+    description: Local path to an existing JAR file (mutually exclusive with jar-url)
+    required: false
+    default: ""
+  codeartifact-domain:
+    description: CodeArtifact domain name
+    required: true
+  codeartifact-domain-owner:
+    description: AWS account ID that owns the CodeArtifact domain
+    required: true
+  codeartifact-repository:
+    description: CodeArtifact repository name
+    required: true
+  aws-region:
+    description: AWS region where CodeArtifact is hosted
+    required: true
+
+runs:
+  using: "composite"
+  steps:
+    - name: Check if package already exists in CodeArtifact
+      id: check
+      shell: bash
+      env:
+        CODEARTIFACT_DOMAIN: ${{ inputs.codeartifact-domain }}
+        CODEARTIFACT_DOMAIN_OWNER: ${{ inputs.codeartifact-domain-owner }}
+        CODEARTIFACT_REPOSITORY: ${{ inputs.codeartifact-repository }}
+        GROUP_ID: ${{ inputs.group-id }}
+        ARTIFACT_ID: ${{ inputs.artifact-id }}
+        VERSION: ${{ inputs.version }}
+        AWS_REGION: ${{ inputs.aws-region }}
+      run: |
+        if aws codeartifact describe-package-version \
+            --domain "$CODEARTIFACT_DOMAIN" \
+            --domain-owner "$CODEARTIFACT_DOMAIN_OWNER" \
+            --repository "$CODEARTIFACT_REPOSITORY" \
+            --format maven \
+            --namespace "$GROUP_ID" \
+            --package "$ARTIFACT_ID" \
+            --package-version "$VERSION" \
+            --region "$AWS_REGION" > /dev/null 2>&1; then
+          echo "exists=true" >> "$GITHUB_OUTPUT"
+        else
+          echo "exists=false" >> "$GITHUB_OUTPUT"
+        fi
+
+    - name: Download JAR from remote URL
+      if: steps.check.outputs.exists == 'false' && inputs.jar-url != ''
+      shell: bash
+      env:
+        JAR_URL: ${{ inputs.jar-url }}
+      run: curl -fsSL -o _downloaded.jar "$JAR_URL"
+
+    - name: Publish JAR to CodeArtifact
+      if: steps.check.outputs.exists == 'false'
+      shell: bash
+      env:
+        CODEARTIFACT_DOMAIN: ${{ inputs.codeartifact-domain }}
+        GROUP_ID: ${{ inputs.group-id }}
+        ARTIFACT_ID: ${{ inputs.artifact-id }}
+        VERSION: ${{ inputs.version }}
+        JAR_FILE: ${{ inputs.jar-path != '' && inputs.jar-path || '_downloaded.jar' }}
+        REPO_URL: "https://${{ inputs.codeartifact-domain }}-${{ inputs.codeartifact-domain-owner }}.d.codeartifact.${{ inputs.aws-region }}.amazonaws.com/maven/${{ inputs.codeartifact-repository }}/"
+      run: |
+        mvn deploy:deploy-file -ntp \
+          -Dfile="$JAR_FILE" \
+          -DgroupId="$GROUP_ID" \
+          -DartifactId="$ARTIFACT_ID" \
+          -Dversion="$VERSION" \
+          -Dpackaging=jar \
+          -DgeneratePom=true \
+          -DrepositoryId="$CODEARTIFACT_DOMAIN" \
+          -Durl="$REPO_URL" \
+          --settings ~/.m2/settings.xml
