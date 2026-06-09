@@ -57,7 +57,7 @@ runs:
         cache-dependency-path: "${{ inputs.working-directory }}/pom.xml"
 
     - name: Authenticate with CodeArtifact
-      uses: OvertureMaps/workflows/.github/actions/setup-codeartifact@main # zizmor: ignore[unpinned-uses] -- self-referential; SHA updated in follow-up commit
+      uses: OvertureMaps/workflows/.github/actions/setup-codeartifact@main # zizmor: ignore[unpinned-uses] -- trusted same-repo self-reference; pinned to the branch-protected default branch by design
       with:
         aws-role-arn: ${{ inputs.aws-role-arn }}
         aws-region: ${{ inputs.aws-region }}

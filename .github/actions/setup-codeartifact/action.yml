@@ -45,7 +45,7 @@ runs:
   using: "composite"
   steps:
     - name: Configure AWS Credentials
-      uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a # v4.3.1
+      uses: aws-actions/configure-aws-credentials@e7f100cf4c008499ea8adda475de1042d6975c7b # v6.2.0
       with:
         role-to-assume: ${{ inputs.aws-role-arn }}
         aws-region: ${{ inputs.aws-region }}
@@ -71,16 +71,37 @@ runs:
         echo "token=$TOKEN" >> "$GITHUB_OUTPUT"
 
     - name: Configure Maven Settings for CodeArtifact
-      uses: whelk-io/maven-settings-xml-action@9dc09b23833fa9aa7f27b63db287951856f3433d # v22 # zizmor: ignore[archived-uses] -- upstream archived but SHA-pinned; canonical settings.xml writer with no maintained drop-in replacement
-      with:
-        repositories: >
-          [{
-            "id": "${{ inputs.codeartifact-domain }}",
-            "url": "https://${{ inputs.codeartifact-domain }}-${{ inputs.codeartifact-domain-owner }}.d.codeartifact.${{ inputs.aws-region }}.amazonaws.com/maven/${{ inputs.codeartifact-repository }}/"
-          }]
-        servers: >
-          [{
-            "id": "${{ inputs.codeartifact-domain }}",
-            "username": "aws",
-            "password": "${{ steps.token.outputs.token }}"
-          }]
+      shell: bash
+      env:
+        CODEARTIFACT_DOMAIN: ${{ inputs.codeartifact-domain }}
+        CODEARTIFACT_REPO_URL: "https://${{ inputs.codeartifact-domain }}-${{ inputs.codeartifact-domain-owner }}.d.codeartifact.${{ inputs.aws-region }}.amazonaws.com/maven/${{ inputs.codeartifact-repository }}/"
+        CODEARTIFACT_TOKEN: ${{ steps.token.outputs.token }}
+      run: |
+        mkdir -p ~/.m2
+        cat > ~/.m2/settings.xml <<EOF
+        <settings xmlns="http://maven.apache.org/SETTINGS/1.0.0"
+                  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                  xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.0.0 https://maven.apache.org/xsd/settings-1.0.0.xsd">
+          <servers>
+            <server>
+              <id>${CODEARTIFACT_DOMAIN}</id>
+              <username>aws</username>
+              <password>${CODEARTIFACT_TOKEN}</password>
+            </server>
+          </servers>
+          <profiles>
+            <profile>
+              <id>codeartifact</id>
+              <repositories>
+                <repository>
+                  <id>${CODEARTIFACT_DOMAIN}</id>
+                  <url>${CODEARTIFACT_REPO_URL}</url>
+                </repository>
+              </repositories>
+            </profile>
+          </profiles>
+          <activeProfiles>
+            <activeProfile>codeartifact</activeProfile>
+          </activeProfiles>
+        </settings>
+        EOF

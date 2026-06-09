@@ -104,7 +104,15 @@ step in the same job resolve or deploy artifacts without bespoke setup.
 
 The authorization token is masked in logs and passed from the token step to the
 settings step via a step output (not `$GITHUB_ENV`), then embedded into the
-generated `~/.m2/settings.xml`. Keeping it out of `$GITHUB_ENV` means it is not
+`~/.m2/settings.xml` written by an inline bash step (a `cat <<EOF` heredoc — no
+third-party action). Keeping it out of `$GITHUB_ENV` means it is not
 exposed as an environment variable to later steps — but `settings.xml` itself is
 readable by any subsequent step in the job, so still treat the runner as trusted
 for the duration of the job and call this action only in jobs you control.
+
+### Runtime
+
+The action pins `aws-actions/configure-aws-credentials` to v6.2.0, which runs on
+the Node.js 24 runtime. The `settings.xml` is written by an inline bash step
+rather than a third-party action, so this action carries no Node 20 runtime
+dependency.
