@@ -51,8 +51,7 @@ runs:
         echo "token=$TOKEN" >> "$GITHUB_OUTPUT"
 
     - name: Configure Maven Settings for CodeArtifact
-      # whelk-io/maven-settings-xml-action v22
-      uses: whelk-io/maven-settings-xml-action@9dc09b23833fa9aa7f27b63db287951856f3433d # zizmor: ignore[archived-uses] -- upstream archived but SHA-pinned; canonical settings.xml writer with no maintained drop-in replacement
+      uses: whelk-io/maven-settings-xml-action@9dc09b23833fa9aa7f27b63db287951856f3433d # v22 # zizmor: ignore[archived-uses] -- upstream archived but SHA-pinned; canonical settings.xml writer with no maintained drop-in replacement
       with:
         repositories: >
           [{
