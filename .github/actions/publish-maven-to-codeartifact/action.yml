@@ -28,6 +28,13 @@ inputs:
       the project's release version is published unchanged.
     required: false
     default: ""
+  working-directory:
+    description: >
+      Directory containing the Maven project (its pom.xml and .java-version).
+      Defaults to the repository root. Set this to publish a project that lives
+      in a subdirectory.
+    required: false
+    default: "."
 
 runs:
   using: "composite"
@@ -36,9 +43,9 @@ runs:
       uses: actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9 # v4.8.0
       with:
         distribution: "temurin"
-        java-version-file: ".java-version"
+        java-version-file: "${{ inputs.working-directory }}/.java-version"
         cache: maven
-        cache-dependency-path: "./pom.xml"
+        cache-dependency-path: "${{ inputs.working-directory }}/pom.xml"
 
     - name: Authenticate with CodeArtifact
       uses: OvertureMaps/workflows/.github/actions/setup-codeartifact@main # zizmor: ignore[unpinned-uses] -- self-referential; SHA updated in follow-up commit
@@ -52,6 +59,7 @@ runs:
     - name: Set dev version
       if: ${{ inputs.version != '' }}
       shell: bash
+      working-directory: ${{ inputs.working-directory }}
       env:
         VERSION: ${{ inputs.version }}
       run: |
@@ -62,6 +70,7 @@ runs:
 
     - name: Build and Deploy to CodeArtifact
       shell: bash
+      working-directory: ${{ inputs.working-directory }}
       env:
         CODEARTIFACT_DOMAIN: ${{ inputs.codeartifact-domain }}
         CODEARTIFACT_REPO_URL: "https://${{ inputs.codeartifact-domain }}-${{ inputs.codeartifact-domain-owner }}.d.codeartifact.${{ inputs.aws-region }}.amazonaws.com/maven/${{ inputs.codeartifact-repository }}/"
@@ -83,6 +92,7 @@ runs:
 
     - name: Print JAR Manifest Entries
       shell: bash
+      working-directory: ${{ inputs.working-directory }}
       run: |
         JAR_FILE=$(find target -name "*-shaded.jar" -print -quit)
         if [ -z "$JAR_FILE" ]; then

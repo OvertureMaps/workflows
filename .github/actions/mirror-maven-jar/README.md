@@ -111,6 +111,6 @@ leaves nothing to deploy, so always provide exactly one.
 
 ### Why it has no auth step
 
-Unlike `deploy-maven-to-codeartifact`, this action assumes authentication already
+Unlike `publish-maven-to-codeartifact`, this action assumes authentication already
 happened in the same job via `setup-codeartifact`. This lets a single job mirror
 many JARs after one authentication step, avoiding repeated OIDC role assumptions.

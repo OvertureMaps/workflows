@@ -21,7 +21,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Build and publish to CodeArtifact
-        uses: OvertureMaps/workflows/.github/actions/deploy-maven-to-codeartifact@main
+        uses: OvertureMaps/workflows/.github/actions/publish-maven-to-codeartifact@main
         with:
           aws-role-arn: arn:aws:iam::123456789012:role/codeartifact-publisher
           codeartifact-domain: overture
@@ -37,7 +37,7 @@ Set `version` to publish a dev-named artifact. The pom version is overridden via
 
 ```yaml
 - name: Publish dev build
-  uses: OvertureMaps/workflows/.github/actions/deploy-maven-to-codeartifact@main
+  uses: OvertureMaps/workflows/.github/actions/publish-maven-to-codeartifact@main
   with:
     aws-role-arn: arn:aws:iam::123456789012:role/codeartifact-publisher
     codeartifact-domain: overture
@@ -49,7 +49,7 @@ Set `version` to publish a dev-named artifact. The pom version is overridden via
 </details>
 
 > Pin to a commit SHA rather than `@main` for reproducible builds, e.g.
-> `uses: OvertureMaps/workflows/.github/actions/deploy-maven-to-codeartifact@<sha>`.
+> `uses: OvertureMaps/workflows/.github/actions/publish-maven-to-codeartifact@<sha>`.
 
 ## Reference
 
@@ -61,6 +61,7 @@ Set `version` to publish a dev-named artifact. The pom version is overridden via
 - `codeartifact-domain-owner` (**required**): AWS account ID that owns the CodeArtifact domain.
 - `codeartifact-repository` (**required**): CodeArtifact repository name.
 - `version` (optional): Artifact version override. When set, the pom version is overridden via `mvn versions:set` and the project is built with dev naming (`-Denv=dev`). When empty (default), the project's release version is published unchanged (`-Denv=release`).
+- `working-directory` (optional): Directory containing the Maven project (its `pom.xml` and `.java-version`). Defaults to the repository root (`.`). Set this to publish a project that lives in a subdirectory.
 
 ### Outputs
 
