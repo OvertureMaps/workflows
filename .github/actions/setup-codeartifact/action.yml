@@ -1,0 +1,86 @@
+name: Authenticate with AWS CodeArtifact
+description: >
+  Assumes an IAM role via OIDC, acquires a CodeArtifact authorization token,
+  and writes Maven settings.xml so subsequent mvn commands can resolve and
+  deploy artifacts. Must be called before any Maven step that touches CodeArtifact.
+
+inputs:
+  aws-role-arn:
+    description: IAM role ARN to assume via OIDC
+    required: true
+  aws-region:
+    description: AWS region where CodeArtifact is hosted
+    required: false
+    default: us-west-2
+  codeartifact-domain:
+    description: CodeArtifact domain name
+    required: true
+  codeartifact-domain-owner:
+    description: AWS account ID that owns the CodeArtifact domain
+    required: true
+  codeartifact-repository:
+    description: CodeArtifact repository name
+    required: true
+
+outputs:
+  codeartifact-domain:
+    description: CodeArtifact domain name (echo of the input, for piping to later steps)
+    value: ${{ inputs.codeartifact-domain }}
+  codeartifact-domain-owner:
+    description: AWS account ID that owns the CodeArtifact domain (echo of the input)
+    value: ${{ inputs.codeartifact-domain-owner }}
+  codeartifact-repository:
+    description: CodeArtifact repository name (echo of the input)
+    value: ${{ inputs.codeartifact-repository }}
+  aws-region:
+    description: AWS region where CodeArtifact is hosted (echo of the input)
+    value: ${{ inputs.aws-region }}
+  repository-url:
+    description: >
+      Fully-composed CodeArtifact Maven repository URL. Pipe this to a later
+      mvn step (e.g. -DaltDeploymentRepository / -Durl) instead of rebuilding it.
+    value: "https://${{ inputs.codeartifact-domain }}-${{ inputs.codeartifact-domain-owner }}.d.codeartifact.${{ inputs.aws-region }}.amazonaws.com/maven/${{ inputs.codeartifact-repository }}/"
+
+runs:
+  using: "composite"
+  steps:
+    - name: Configure AWS Credentials
+      uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a # v4.3.1
+      with:
+        role-to-assume: ${{ inputs.aws-role-arn }}
+        aws-region: ${{ inputs.aws-region }}
+
+    - name: Generate CodeArtifact Token
+      id: token
+      shell: bash
+      # Token is passed to the next step via a masked step output rather than
+      # $GITHUB_ENV, so it is not exposed as an env var to later steps. It is
+      # still embedded into ~/.m2/settings.xml, so the runner must be trusted.
+      env:
+        CODEARTIFACT_DOMAIN: ${{ inputs.codeartifact-domain }}
+        CODEARTIFACT_DOMAIN_OWNER: ${{ inputs.codeartifact-domain-owner }}
+        AWS_REGION: ${{ inputs.aws-region }}
+      run: |
+        TOKEN=$(aws codeartifact get-authorization-token \
+          --domain "$CODEARTIFACT_DOMAIN" \
+          --domain-owner "$CODEARTIFACT_DOMAIN_OWNER" \
+          --region "$AWS_REGION" \
+          --query authorizationToken \
+          --output text)
+        echo "::add-mask::$TOKEN"
+        echo "token=$TOKEN" >> "$GITHUB_OUTPUT"
+
+    - name: Configure Maven Settings for CodeArtifact
+      uses: whelk-io/maven-settings-xml-action@9dc09b23833fa9aa7f27b63db287951856f3433d # v22 # zizmor: ignore[archived-uses] -- upstream archived but SHA-pinned; canonical settings.xml writer with no maintained drop-in replacement
+      with:
+        repositories: >
+          [{
+            "id": "${{ inputs.codeartifact-domain }}",
+            "url": "https://${{ inputs.codeartifact-domain }}-${{ inputs.codeartifact-domain-owner }}.d.codeartifact.${{ inputs.aws-region }}.amazonaws.com/maven/${{ inputs.codeartifact-repository }}/"
+          }]
+        servers: >
+          [{
+            "id": "${{ inputs.codeartifact-domain }}",
+            "username": "aws",
+            "password": "${{ steps.token.outputs.token }}"
+          }]
