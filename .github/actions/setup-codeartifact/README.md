@@ -47,9 +47,35 @@ jobs:
 
 ### Outputs
 
-This action has no outputs. It configures the environment for later steps: it
-acquires a CodeArtifact authorization token (masked, passed internally via a
-step output rather than `$GITHUB_ENV`) and writes `~/.m2/settings.xml`.
+The action's primary effect is environmental: it acquires a CodeArtifact
+authorization token (masked, passed internally via a step output rather than
+`$GITHUB_ENV`) and writes `~/.m2/settings.xml`. It also echoes the CodeArtifact
+metadata back as outputs so later steps can pipe from a single source of truth
+instead of re-specifying it:
+
+- `codeartifact-domain` — the domain name.
+- `codeartifact-domain-owner` — the owning AWS account ID.
+- `codeartifact-repository` — the repository name.
+- `aws-region` — the AWS region.
+- `repository-url` — the fully-composed Maven repository URL
+  (`https://<domain>-<owner>.d.codeartifact.<region>.amazonaws.com/maven/<repo>/`).
+
+The authorization token is intentionally **not** exposed as an output — it lives
+only in `settings.xml`.
+
+```yaml
+- name: Authenticate with CodeArtifact
+  id: ca
+  uses: OvertureMaps/workflows/.github/actions/setup-codeartifact@main
+  with:
+    aws-role-arn: arn:aws:iam::123456789012:role/codeartifact-publisher
+    codeartifact-domain: overture
+    codeartifact-domain-owner: "123456789012"
+    codeartifact-repository: maven-releases
+
+- name: Deploy with the piped URL
+  run: mvn deploy -DaltDeploymentRepository="overture::${{ steps.ca.outputs.repository-url }}" --settings ~/.m2/settings.xml
+```
 
 ### Permissions
 

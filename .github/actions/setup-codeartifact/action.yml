@@ -22,6 +22,25 @@ inputs:
     description: CodeArtifact repository name
     required: true
 
+outputs:
+  codeartifact-domain:
+    description: CodeArtifact domain name (echo of the input, for piping to later steps)
+    value: ${{ inputs.codeartifact-domain }}
+  codeartifact-domain-owner:
+    description: AWS account ID that owns the CodeArtifact domain (echo of the input)
+    value: ${{ inputs.codeartifact-domain-owner }}
+  codeartifact-repository:
+    description: CodeArtifact repository name (echo of the input)
+    value: ${{ inputs.codeartifact-repository }}
+  aws-region:
+    description: AWS region where CodeArtifact is hosted (echo of the input)
+    value: ${{ inputs.aws-region }}
+  repository-url:
+    description: >
+      Fully-composed CodeArtifact Maven repository URL. Pipe this to a later
+      mvn step (e.g. -DaltDeploymentRepository / -Durl) instead of rebuilding it.
+    value: "https://${{ inputs.codeartifact-domain }}-${{ inputs.codeartifact-domain-owner }}.d.codeartifact.${{ inputs.aws-region }}.amazonaws.com/maven/${{ inputs.codeartifact-repository }}/"
+
 runs:
   using: "composite"
   steps:
