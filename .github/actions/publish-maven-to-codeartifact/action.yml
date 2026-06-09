@@ -57,9 +57,7 @@ runs:
         cache-dependency-path: "${{ inputs.working-directory }}/pom.xml"
 
     - name: Authenticate with CodeArtifact
-      # TEMPORARY: branch ref for pre-merge testing of overture-matchers#287.
-      # MUST revert to @main before #25 merges (then SHA-pin in the follow-up).
-      uses: OvertureMaps/workflows/.github/actions/setup-codeartifact@lowlydba/scala-codeartifact-actions # zizmor: ignore[unpinned-uses] -- self-referential; temporary branch ref for pre-merge testing, reverts to @main before merge
+      uses: OvertureMaps/workflows/.github/actions/setup-codeartifact@main # zizmor: ignore[unpinned-uses] -- self-referential; SHA updated in follow-up commit
       with:
         aws-role-arn: ${{ inputs.aws-role-arn }}
         aws-region: ${{ inputs.aws-region }}
