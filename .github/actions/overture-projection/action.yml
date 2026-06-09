@@ -206,11 +206,11 @@ runs:
     - name: Generate context token
       id: context-token
       if: ${{ inputs['app-private-key'] != '' }}
-      uses: actions/create-github-app-token@f8d387b68d61c58ab83c6c016672934102569859 # v3.0.0 # zizmor: ignore[github-app]
+      uses: actions/create-github-app-token@f8d387b68d61c58ab83c6c016672934102569859 # v3.0.0 # zizmor: ignore[github-app] -- intentional: org-wide reusable workflow; dedicated GH App limits risk in lieu of per-repo scoping
       with:
         app-id: ${{ inputs['app-id'] }}
         private-key: ${{ inputs['app-private-key'] }}
-        owner: ${{ github.repository_owner }} # zizmor: ignore[github-app]
+        owner: ${{ github.repository_owner }} # zizmor: ignore[github-app] -- intentional: org-wide reusable workflow; dedicated GH App limits risk in lieu of per-repo scoping
 
     # -- Step 1a: Checkout skills from omf-devex --------------------------------
     # Sparse-checks out only the skills/ tree from omf-devex at a fixed ref.
