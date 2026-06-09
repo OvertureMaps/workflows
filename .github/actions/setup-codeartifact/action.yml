@@ -70,6 +70,12 @@ runs:
         echo "::add-mask::$TOKEN"
         echo "token=$TOKEN" >> "$GITHUB_OUTPUT"
 
+    # settings.xml is written inline rather than via actions/setup-java's
+    # generator. CodeArtifact needs both a <server> (credentials) and a
+    # <repository> (resolve URL) in settings.xml; setup-java emits only
+    # <servers> with ${env.*} credential placeholders, which would drop the
+    # resolve repository and force the token into the environment at mvn time.
+    # An inline writer also keeps this auth action JDK-agnostic.
     - name: Configure Maven Settings for CodeArtifact
       shell: bash
       env:
