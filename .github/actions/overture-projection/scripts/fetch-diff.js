@@ -34,7 +34,7 @@
 module.exports = async ({ github, context, core }) => {
   const fs   = require('fs');
   const path = require('path');
-  const { buildIgnorePatterns, isIgnored, isTestFile, applyFileBudget } = require('./lib/diff');
+  const { buildIgnorePatterns, isIgnored, isTestFile, isFixtureFile, applyFileBudget } = require('./lib/diff');
   const { resolveRepo, resolvePrNumber } = require('./lib/github');
   const { DEFAULT_MAX_DIFF_CHARS } = require('./lib/defaults');
 
@@ -81,8 +81,9 @@ module.exports = async ({ github, context, core }) => {
     core.info(`⏭️  Ignored ${ignoredFiles.length} file(s): ${ignoredFiles.map(f => f.filename).join(', ')}`);
   }
 
-  // ponytail: stable sort — test files last so source files win the budget race
-  const prioritized = [...includedFiles.filter(f => !isTestFile(f)), ...includedFiles.filter(isTestFile)];
+  // ponytail: stable sort — fixtures last, then tests, source files first
+  const isLowPriority = f => isTestFile(f) || isFixtureFile(f);
+  const prioritized = [...includedFiles.filter(f => !isLowPriority(f)), ...includedFiles.filter(isLowPriority)];
 
   const { included: files, skipped: budgetSkippedFiles } = applyFileBudget(prioritized, fetchCeiling);
   core.info(`📐 Fetch ceiling: ${fetchCeiling} chars — fetched ${files.length} file(s), ceiling-skipped ${budgetSkippedFiles.length} file(s)`);

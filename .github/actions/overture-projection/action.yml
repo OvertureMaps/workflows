@@ -160,6 +160,12 @@ inputs:
       *.pdf
       *.min.js
       *.min.css
+      *.geojson
+      *.parquet
+      *.geoparquet
+      *.pmtiles
+      *.mbtiles
+      *.csv
   comment-mode:
     description: >-
       Controls how the review is posted. 'update' posts a single issue comment
