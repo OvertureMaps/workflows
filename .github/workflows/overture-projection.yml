@@ -182,7 +182,7 @@ jobs:
 
     steps:
       - name: Run Overture PRojection
-        uses: OvertureMaps/workflows/.github/actions/overture-projection@main # zizmor: ignore[unpinned-uses] -- self-referential; SHA updated in follow-up commit
+        uses: OvertureMaps/workflows/.github/actions/overture-projection@lowlydba/feat-skip-binary-files-in-reviewer # zizmor: ignore[unpinned-uses] -- TEMP: testing binary-file exclusions; revert to @main before merge
         with:
           always-skills: "pr-review"
           repository: ${{ github.event_name == 'pull_request' && github.event.repository.full_name || inputs.repository || github.event.repository.full_name }}
