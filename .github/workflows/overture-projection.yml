@@ -145,33 +145,30 @@ on:
           - github-models
           - anthropic
       model:
-        description: "Review model (leave blank to use provider default)"
+        description: "Review model. GitHub Models options work with github-models provider; claude-* options require model_provider=anthropic."
         required: false
         type: choice
         default: ""
         options:
           - ""                  # provider default (gpt-4.1 / claude-opus-4-6)
-          - gpt-4.1             # GitHub Models default — best quality, 8k ctx
-          - gpt-4.1-mini        # faster, cheaper
-          - gpt-4.1-nano        # fastest, cheapest
-          - gpt-4o              # previous gen
-          - o4-mini             # reasoning model, slower
-          - claude-opus-4-5     # best Claude via GitHub Models
-          - claude-sonnet-4-5   # mid-tier Claude
-          - claude-haiku-4-5    # fast Claude
-          - claude-opus-4-6     # Anthropic provider only
-          - claude-haiku-4-6    # Anthropic selection model default
+          - gpt-4.1             # github-models — best quality, 8k ctx
+          - gpt-4.1-mini        # github-models — faster, cheaper
+          - gpt-4.1-nano        # github-models — fastest, cheapest
+          - gpt-4o              # github-models — previous gen
+          - o4-mini             # github-models — reasoning model, slower
+          - claude-opus-4-6     # anthropic — best quality, 200k ctx
+          - claude-sonnet-4-5   # anthropic — mid-tier
+          - claude-haiku-4-6    # anthropic — fast, cheap
       selection_model:
-        description: "Skill selection model (leave blank to use provider default)"
+        description: "Skill selection model. Leave blank to use provider default (gpt-4.1-mini / claude-haiku-4-6)."
         required: false
         type: choice
         default: ""
         options:
-          - ""                  # provider default (gpt-4.1-mini / claude-haiku-4-6)
-          - gpt-4.1-mini        # GitHub Models default
-          - gpt-4.1-nano
-          - claude-haiku-4-5
-          - claude-haiku-4-6    # Anthropic default
+          - ""                  # provider default
+          - gpt-4.1-mini        # github-models default
+          - gpt-4.1-nano        # github-models — cheapest
+          - claude-haiku-4-6    # anthropic default
       max_input_tokens:
         description: "Max input tokens. Defaults automatically by provider when not set (6200 for github-models, 190000 for anthropic)."
         required: false
