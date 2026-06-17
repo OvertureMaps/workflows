@@ -256,6 +256,13 @@ describe('buildUserPrompt', () => {
     assert.match(result, /Tests: ✅/);
   });
 
+  it('shows Tests: ✅ (not reviewed — budget-cut) when tests are only in budgetSkippedFiles', () => {
+    const result = buildUserPrompt(makePRData({
+      budgetSkippedFiles: ['src/__tests__/parser.test.ts'],
+    }));
+    assert.match(result, /Tests: ✅ \(not reviewed — budget-cut\)/);
+  });
+
   it('shows Tests: ❌ none in diff when no test files are present', () => {
     const result = buildUserPrompt(makePRData());
     assert.match(result, /Tests: ❌ none in diff/);
