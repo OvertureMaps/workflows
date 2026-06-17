@@ -136,18 +136,42 @@ on:
         description: omf-devex ref to load skills from
         required: false
         default: main
-      model:
-        description: "Review model ID (e.g. gpt-4.1 or claude-opus-4-6). Defaults automatically by provider when not set."
-        required: false
-        default: ""
-      selection_model:
-        description: "Skill selection model ID. Defaults automatically by provider when not set."
-        required: false
-        default: ""
       model_provider:
-        description: "'github-models' (default) or 'anthropic'"
+        description: "Model provider"
         required: false
+        type: choice
         default: github-models
+        options:
+          - github-models
+          - anthropic
+      model:
+        description: "Review model (leave blank to use provider default)"
+        required: false
+        type: choice
+        default: ""
+        options:
+          - ""                  # provider default (gpt-4.1 / claude-opus-4-6)
+          - gpt-4.1             # GitHub Models default — best quality, 8k ctx
+          - gpt-4.1-mini        # faster, cheaper
+          - gpt-4.1-nano        # fastest, cheapest
+          - gpt-4o              # previous gen
+          - o4-mini             # reasoning model, slower
+          - claude-opus-4-5     # best Claude via GitHub Models
+          - claude-sonnet-4-5   # mid-tier Claude
+          - claude-haiku-4-5    # fast Claude
+          - claude-opus-4-6     # Anthropic provider only
+          - claude-haiku-4-6    # Anthropic selection model default
+      selection_model:
+        description: "Skill selection model (leave blank to use provider default)"
+        required: false
+        type: choice
+        default: ""
+        options:
+          - ""                  # provider default (gpt-4.1-mini / claude-haiku-4-6)
+          - gpt-4.1-mini        # GitHub Models default
+          - gpt-4.1-nano
+          - claude-haiku-4-5
+          - claude-haiku-4-6    # Anthropic default
       max_input_tokens:
         description: "Max input tokens. Defaults automatically by provider when not set (6200 for github-models, 190000 for anthropic)."
         required: false
