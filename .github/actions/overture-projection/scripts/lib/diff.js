@@ -141,9 +141,23 @@ function applyFileBudget(files, totalChars) {
   return { included, skipped };
 }
 
+/**
+ * Returns `true` if the file is a test file (should be deprioritized in the
+ * diff budget so source files are reviewed first when context is tight).
+ *
+ * Matches: __tests__/ directories, *.test.*, *.spec.*, test_*.*, *_test.*
+ *
+ * @param {{ filename: string }} file
+ * @returns {boolean}
+ */
+function isTestFile(file) {
+  return /(__tests__|\.test\.|\.spec\.|\/test_|_test\.)/i.test(file.filename);
+}
+
 module.exports = {
   diffCharBudget,
   buildIgnorePatterns,
   isIgnored,
+  isTestFile,
   applyFileBudget,
 };
