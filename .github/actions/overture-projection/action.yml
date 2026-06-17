@@ -131,6 +131,35 @@ inputs:
       go.sum
       *.lock
       *.snap
+      *.png
+      *.jpg
+      *.jpeg
+      *.gif
+      *.ico
+      *.webp
+      *.bmp
+      *.tiff
+      *.svg
+      *.woff
+      *.woff2
+      *.ttf
+      *.eot
+      *.otf
+      *.zip
+      *.tar
+      *.gz
+      *.tgz
+      *.jar
+      *.war
+      *.class
+      *.pyc
+      *.pyo
+      *.mp4
+      *.mp3
+      *.wav
+      *.pdf
+      *.min.js
+      *.min.css
   comment-mode:
     description: >-
       Controls how the review is posted. 'update' posts a single issue comment
