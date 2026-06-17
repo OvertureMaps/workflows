@@ -15,7 +15,11 @@
 
 // ── Model IDs ─────────────────────────────────────────────────────────────────
 
-/** Default model provider. */
+/** Default model provider.
+ * NOTE: GitHub Models is being retired (announced 2026-06-16, timeline TBD).
+ * To migrate: set DEFAULT_PROVIDER to 'anthropic' and ensure ANTHROPIC_API_KEY is set.
+ * See: https://github.blog/changelog/2026-06-16-github-models-is-no-longer-available-to-new-customers/
+ */
 const DEFAULT_PROVIDER = 'github-models';
 
 /** Default review model when model-provider is 'github-models'. */
