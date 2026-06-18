@@ -4,6 +4,8 @@ Posts an AI-generated code review comment on a pull request. Skills drive what t
 
 Supports [GitHub Models](https://docs.github.com/en/github-models) (default) and [Anthropic](https://docs.anthropic.com/en/docs/about-claude/models) as model providers.
 
+> **⚠️ GitHub Models sunset notice (2026-06-16):** GitHub has stopped onboarding new GitHub Models customers and has announced full retirement, with timeline TBD. Existing OvertureMaps usage continues for now. When a sunset date is published, migrate by setting `model-provider: anthropic` and adding the `ANTHROPIC_API_KEY` org secret — the Anthropic path is already fully wired. See the [changelog](https://github.blog/changelog/2026-06-16-github-models-is-no-longer-available-to-new-customers/).
+
 ## How it works
 
 1. **Load skills** — sparse-checkouts `omf-devex/skills/`, parses frontmatter, filters to `pr-reviewer` surface. Raw content is stored; nothing is fetched yet.

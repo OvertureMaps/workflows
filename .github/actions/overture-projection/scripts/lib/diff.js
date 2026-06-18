@@ -141,9 +141,37 @@ function applyFileBudget(files, totalChars) {
   return { included, skipped };
 }
 
+/**
+ * Returns `true` if the file is a test file (should be deprioritized in the
+ * diff budget so source files are reviewed first when context is tight).
+ *
+ * Matches: __tests__/ directories, *.test.*, *.spec.*, test_*.*, *_test.*
+ *
+ * @param {{ filename: string }} file
+ * @returns {boolean}
+ */
+function isTestFile(file) {
+  return /(__tests__|\.test\.|\.spec\.|\/test_|_test\.)/i.test(file.filename);
+}
+
+/**
+ * Returns `true` if the file is a fixture or data file (should be deprioritized
+ * in the diff budget behind source and test files).
+ *
+ * Matches: fixtures/, testdata/, test-fixtures/, __fixtures__/ directories.
+ *
+ * @param {{ filename: string }} file
+ * @returns {boolean}
+ */
+function isFixtureFile(file) {
+  return /(\/fixtures\/|\/testdata\/|\/test-fixtures\/|__fixtures__)/i.test(file.filename);
+}
+
 module.exports = {
   diffCharBudget,
   buildIgnorePatterns,
   isIgnored,
+  isTestFile,
+  isFixtureFile,
   applyFileBudget,
 };

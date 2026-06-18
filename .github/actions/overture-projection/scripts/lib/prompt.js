@@ -161,8 +161,14 @@ function buildUserPromptParts(prData) {
     prData.files.every(f => DOCS_EXTENSIONS.has('.' + f.filename.split('.').pop().toLowerCase()));
   const prTypeNote = docsOnly ? 'PR type: docs-only' : 'PR type: code';
 
-  const hasTests   = prData.files.some(f => isTestFile(f.filename));
-  const testsNote  = docsOnly ? '' : ` | Tests: ${hasTests ? '✅' : '❌ none in diff'}`;
+  const testsInDiff    = prData.files.some(f => isTestFile(f.filename));
+  const testsSkipped   = prData.budgetSkippedFiles?.some(f => isTestFile(f));
+  const hasTests       = testsInDiff || testsSkipped;
+  const testsNote      = docsOnly ? '' : ` | Tests: ${
+    !hasTests      ? '❌ none in diff' :
+    testsInDiff    ? '✅' :
+                     '✅ (not reviewed — budget-cut)'
+  }`;
   const authorNote = prData.authorAssociation ? ` | Author: ${prData.authorAssociation}` : '';
 
   const prHeader =

@@ -6,6 +6,8 @@ const {
   diffCharBudget,
   buildIgnorePatterns,
   isIgnored,
+  isTestFile,
+  isFixtureFile,
   applyFileBudget,
 } = require('../diff');
 
@@ -78,6 +80,65 @@ describe('isIgnored', () => {
   it('matches an exact basename in a subdirectory', () => {
     const patterns = buildIgnorePatterns('package-lock.json');
     assert.equal(isIgnored({ filename: 'frontend/package-lock.json' }, patterns), true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// isTestFile
+// ---------------------------------------------------------------------------
+
+describe('isTestFile', () => {
+  it('matches __tests__ directory', () => {
+    assert.equal(isTestFile({ filename: 'src/__tests__/foo.js' }), true);
+  });
+
+  it('matches *.test.* files', () => {
+    assert.equal(isTestFile({ filename: 'src/foo.test.ts' }), true);
+  });
+
+  it('matches *.spec.* files', () => {
+    assert.equal(isTestFile({ filename: 'src/foo.spec.js' }), true);
+  });
+
+  it('matches test_* prefix', () => {
+    assert.equal(isTestFile({ filename: 'tests/test_parser.py' }), true);
+  });
+
+  it('matches *_test suffix', () => {
+    assert.equal(isTestFile({ filename: 'parser_test.go' }), true);
+  });
+
+  it('does not match regular source files', () => {
+    assert.equal(isTestFile({ filename: 'src/parser.ts' }), false);
+    assert.equal(isTestFile({ filename: 'src/routes.ts' }), false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// isFixtureFile
+// ---------------------------------------------------------------------------
+
+describe('isFixtureFile', () => {
+  it('matches fixtures/ directory', () => {
+    assert.equal(isFixtureFile({ filename: 'tests/fixtures/sample.json' }), true);
+  });
+
+  it('matches testdata/ directory', () => {
+    assert.equal(isFixtureFile({ filename: 'pkg/testdata/input.json' }), true);
+  });
+
+  it('matches test-fixtures/ directory', () => {
+    assert.equal(isFixtureFile({ filename: 'src/test-fixtures/mock.json' }), true);
+  });
+
+  it('matches __fixtures__/ directory', () => {
+    assert.equal(isFixtureFile({ filename: 'src/__fixtures__/response.json' }), true);
+  });
+
+  it('does not match regular source or config files', () => {
+    assert.equal(isFixtureFile({ filename: 'src/parser.ts' }), false);
+    assert.equal(isFixtureFile({ filename: 'package.json' }), false);
+    assert.equal(isFixtureFile({ filename: 'tools.json' }), false);
   });
 });
 
