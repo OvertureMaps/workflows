@@ -44,7 +44,7 @@ jobs:
       contents: read
       pull-requests: write # to post Black formatting annotations on PRs
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           persist-credentials: false
 
@@ -53,7 +53,7 @@ jobs:
         env:
           BLACK_VERSION: ${{ inputs.black_version || '25.12.0' }}
 
-      - uses: reviewdog/action-black@644053a260402bc4278a865906107bd8aef7fae8 # v3.22.4
+      - uses: reviewdog/action-black@9b4feb439b707a9b7673086795cc53e417a03abe # v3.23.0
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           reporter: github-pr-check

@@ -241,7 +241,7 @@ runs:
     - name: Generate context token
       id: context-token
       if: ${{ inputs['app-private-key'] != '' }}
-      uses: actions/create-github-app-token@f8d387b68d61c58ab83c6c016672934102569859 # v3.0.0 # zizmor: ignore[github-app] -- intentional: org-wide reusable workflow; dedicated GH App limits risk in lieu of per-repo scoping
+      uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0 # zizmor: ignore[github-app] -- intentional: org-wide reusable workflow; dedicated GH App limits risk in lieu of per-repo scoping
       with:
         app-id: ${{ inputs['app-id'] }}
         private-key: ${{ inputs['app-private-key'] }}
@@ -250,7 +250,7 @@ runs:
     # -- Step 1a: Checkout skills from omf-devex --------------------------------
     # Sparse-checks out only the skills/ tree from omf-devex at a fixed ref.
     - name: Checkout skills
-      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       with:
         repository: OvertureMaps/omf-devex
         ref: ${{ inputs['devex-ref'] }}
@@ -267,7 +267,7 @@ runs:
     # skills pay the network cost.
     - name: Load skills
       id: fetch-skills
-      uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7.1.0
+      uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
       env:
         SKILLS_DIR: ${{ format('{0}/.omf-devex-skills/skills', github.workspace) }}
       with:
@@ -282,7 +282,7 @@ runs:
     # Writes pr.json to RUNNER_TEMP. Outputs changed-paths for the next step.
     - name: Fetch PR diff
       id: fetch-diff
-      uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7.1.0
+      uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
       env:
         MAX_FILES: ${{ inputs['max-files'] }}
         MAX_DIFF_CHARS: ${{ inputs['max-diff-chars'] }}
@@ -302,7 +302,7 @@ runs:
     # bypass this step. Outputs selected skill names as a JSON array string.
     - name: Select skills
       id: select-skills
-      uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7.1.0
+      uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
       env:
         AI_TOKEN: ${{ inputs['model-provider'] == 'anthropic' && inputs['anthropic-api-key'] || inputs['github-token'] != '' && inputs['github-token'] || github.token }}
         MODEL_PROVIDER: ${{ inputs['model-provider'] }}
@@ -322,7 +322,7 @@ runs:
     # the token budget), optionally capped by MAX_CONTEXT_FILE_CHARS_OVERRIDE.
     - name: Fetch context files
       id: fetch-context
-      uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7.1.0
+      uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
       env:
         CONTEXT_TOKEN: ${{ steps.context-token.outputs.token || inputs['github-token'] != '' && inputs['github-token'] || github.token }}
         SELECTED_SKILLS: ${{ steps.select-skills.outputs.selected }}
@@ -340,7 +340,7 @@ runs:
     # Reads skills.json and pr.json, builds the system prompt from selected
     # skills (in order), calls the review model, and posts a PR review comment.
     - name: Post review
-      uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7.1.0
+      uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
       env:
         AI_TOKEN: ${{ inputs['model-provider'] == 'anthropic' && inputs['anthropic-api-key'] || inputs['github-token'] != '' && inputs['github-token'] || github.token }}
         MODEL_ID: ${{ inputs.model }}
