@@ -15,3 +15,17 @@ updates:
       include: "scope"
     cooldown:
       default-days: 7
+
+  # Maintain composite action dependencies
+  - package-ecosystem: "github-actions"
+    directory: "/.github/actions/check-linked-issue"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    labels:
+      - "bot"
+    commit-message:
+      prefix: "[CHORE](gha)"
+      include: "scope"
+    cooldown:
+      default-days: 7
