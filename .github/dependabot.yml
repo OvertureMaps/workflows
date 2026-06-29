@@ -18,7 +18,8 @@ updates:
 
   # Maintain composite action dependencies
   - package-ecosystem: "github-actions"
-    directory: "/.github/actions/check-linked-issue"
+    directories:
+      - "/.github/actions/*"
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 5
