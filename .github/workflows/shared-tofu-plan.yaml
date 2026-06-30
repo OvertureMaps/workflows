@@ -1,0 +1,158 @@
+# Reusable workflow for planning OpenTofu code.
+name: Tofu Plan
+
+on:
+  workflow_call:
+    inputs:
+      environment:
+        description: 'Name of the Github environment to use'
+        required: true
+        type: string
+      oidc_role_arn:
+        description: 'ARN of the IAM role to assume with OIDC'
+        required: true
+        type: string
+      tofu_workspace:
+        description: 'Name of the OpenTofu workspace to use'
+        required: false
+        default: ''
+        type: string
+      tofu_variables:
+        description: 'Variables to pass to OpenTofu'
+        required: false
+        default: ''
+        type: string
+      tofu_backend_config:
+        description: 'Backend configuration for OpenTofu'
+        required: false
+        default: ''
+        type: string
+      tofu_plan_label:
+        description: 'Label for the OpenTofu plan output'
+        required: false
+        default: ''
+        type: string
+      tofu_var_file:
+        description: 'List of var file paths, one per line'
+        required: false
+        default: ''
+        type: string
+      tofu_add_github_comment:
+        description: 'Add the plan to a GitHub PR'
+        required: false
+        default: 'true'
+        type: string
+      oidc_audience:
+        description: 'OIDC audience to authenticate against'
+        required: false
+        default: 'sts.amazonaws.com'
+        type: string
+      oidc_region:
+        description: 'Default region for AWS client'
+        required: false
+        default: us-west-2
+        type: string
+      trigger_plan:
+        description: 'Whether to trigger the OpenTofu plan job'
+        required: false
+        default: true
+        type: boolean
+      env:
+        description: 'Extra environment variables'
+        required: false
+        type: string
+      secrets_manager_keys:
+        description: 'List of keys to fetch from AWS Secrets Manager'
+        required: false
+        default: ''
+        type: string
+      artifact_name:
+        description: "The artifact name to download"
+        required: false
+        type: string
+      artifact_path:
+        description: "The artifact path to download"
+        required: false
+        type: string
+      azure_oidc:
+        description: "Whether to log in to Azure with OIDC (requires secrets set up)"
+        required: false
+        type: boolean
+        default: false
+    secrets:
+      env_secret:
+        description: 'Extra secret environment variables'
+        required: false
+      tofu_secret_variables:
+        description: 'Variables that contains secrets to pass to OpenTofu'
+        required: false
+      http_credentials:
+        description: 'Credentials that will be used for fetching modules sources'
+        required: false
+
+
+permissions: {}
+
+jobs:
+  tofu_plan:
+    runs-on: ubuntu-latest
+    name: "Tofu Plan - ${{ inputs.environment }}"
+    environment: ${{ inputs.environment }}
+    if: ${{ inputs.trigger_plan }}
+    permissions:
+      id-token: write      # Required for OIDC authentication with AWS
+      contents: read
+      pull-requests: write # Required for dflook/tofu-plan to post plan output to PR
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+
+      - name: Set Environment Variables
+        id: set-env
+        env:
+          INPUT_ENV: ${{ inputs.env }}
+          INPUT_ENV_SECRET: ${{ secrets.env_secret }}
+          INPUT_TOFU_SECRET_VARS: ${{ secrets.tofu_secret_variables }}
+        run: |
+            echo "$INPUT_ENV" >> $GITHUB_ENV
+            for val in $(echo "$INPUT_ENV_SECRET" | cut -d'=' -f2-); do echo ::add-mask::$val ; done
+            for val in $(echo "$INPUT_TOFU_SECRET_VARS" | cut -d'=' -f2-); do echo ::add-mask::$val ; done
+            echo "$INPUT_ENV_SECRET" >> $GITHUB_ENV
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # v6.0.0
+        with:
+          audience: ${{ inputs.oidc_audience }}
+          role-to-assume: ${{ inputs.oidc_role_arn }}
+          aws-region: ${{ inputs.oidc_region }}
+
+      - name: Read secrets from AWS Secrets Manager into environment variables
+        if: ${{ inputs.secrets_manager_keys != '' }}
+        uses: aws-actions/aws-secretsmanager-get-secrets@3a411b6ec5cace3d626412dd917e7bfeac242cfa # v3.0.0
+        with:
+          secret-ids: ${{ inputs.secrets_manager_keys }}
+          name-transformation: none
+
+      - name: Download artifact
+        if: ${{ inputs.artifact_name != '' }}
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: ${{ inputs.artifact_name }}
+          path: ${{ inputs.artifact_path || '.' }}
+
+      - name: tofu Plan
+        uses: dflook/tofu-plan@3f5dc358343fb58cd60f83b019e810315aa8258f # v2.2.3
+        with:
+          label: ${{ inputs.tofu_plan_label || inputs.environment }}
+          workspace: ${{ inputs.tofu_workspace || inputs.environment }}
+          backend_config: ${{ inputs.tofu_backend_config }}
+          var_file: ${{ inputs.tofu_var_file }}
+          add_github_comment: ${{ inputs.tofu_add_github_comment }}
+          variables: |
+            ${{ inputs.tofu_variables }}
+            ${{ secrets.tofu_secret_variables }}
+        env:
+          TERRAFORM_HTTP_CREDENTIALS: ${{ env.TERRAFORM_HTTP_CREDENTIALS || secrets.http_credentials }}
