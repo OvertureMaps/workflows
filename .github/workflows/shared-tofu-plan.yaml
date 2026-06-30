@@ -91,29 +91,34 @@ on:
         required: false
 
 
-permissions:
-  id-token: write
-  contents: read
-  pull-requests: write
-
 jobs:
   tofu_plan:
     runs-on: ubuntu-latest
     name: "Tofu Plan - ${{ inputs.environment }}"
     environment: ${{ inputs.environment }}
     if: ${{ inputs.trigger_plan }}
+    permissions:
+      id-token: write      # Required for OIDC authentication with AWS
+      contents: read
+      pull-requests: write # Required for dflook/tofu-plan to post plan output to PR
 
     steps:
       - name: Checkout
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
 
       - name: Set Environment Variables
         id: set-env
+        env:
+          INPUT_ENV: ${{ inputs.env }}
+          INPUT_ENV_SECRET: ${{ secrets.env_secret }}
+          INPUT_TOFU_SECRET_VARS: ${{ secrets.tofu_secret_variables }}
         run: |
-            echo -e '${{ inputs.env }}' >> $GITHUB_ENV
-            for val in $(echo -e '${{ secrets.env_secret }}' | cut -d'=' -f2-); do echo ::add-mask::$val ; done
-            for val in $(echo -e '${{ secrets.tofu_secret_variables }}' | cut -d'=' -f2-); do echo ::add-mask::$val ; done
-            echo -e '${{ secrets.env_secret }}' >> $GITHUB_ENV
+            echo "$INPUT_ENV" >> $GITHUB_ENV
+            for val in $(echo "$INPUT_ENV_SECRET" | cut -d'=' -f2-); do echo ::add-mask::$val ; done
+            for val in $(echo "$INPUT_TOFU_SECRET_VARS" | cut -d'=' -f2-); do echo ::add-mask::$val ; done
+            echo "$INPUT_ENV_SECRET" >> $GITHUB_ENV
 
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # v6.0.0
