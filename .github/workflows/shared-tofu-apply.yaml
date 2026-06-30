@@ -91,6 +91,8 @@ on:
         required: false
 
 
+permissions: {}
+
 jobs:
   tofu_apply:
     runs-on: ubuntu-latest
