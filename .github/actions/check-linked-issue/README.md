@@ -12,8 +12,9 @@ pull request. It detects issues linked by:
 - Body keywords: `Fixes #123`, `Closes #456`, `Resolves owner/repo#789`
 - Manual linking via the GitHub UI
 
-If no linked issues are found, the step fails with a message guiding the author
-to link one.
+If no linked issues are found, the step fails and posts a sticky PR comment
+guiding the author to link one. The comment is automatically removed once the
+check passes (e.g. after a linked issue is added and the check is re-run).
 
 ### Why GraphQL over regex
 
@@ -71,7 +72,8 @@ on:
 
 permissions:
   contents: read
-  pull-requests: read
+  pull-requests: write # to query PR metadata and post/clear failure comments
+  issues: write # to post/clear failure comments via sticky comment action
 
 jobs:
   validate:
@@ -101,9 +103,9 @@ Requires the default `GITHUB_TOKEN` with:
 
 ```yaml
 permissions:
-  contents: read
-  issues: read
-  pull-requests: read
+  contents: none
+  pull-requests: write # to query PR metadata and post/clear failure comments
+  issues: write # to post/clear failure comments via sticky comment action
 ```
 
 ### Inputs
