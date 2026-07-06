@@ -21,6 +21,29 @@ inputs:
   codeartifact-repository:
     description: CodeArtifact repository name
     required: true
+  maven-repository-id:
+    description: >
+      The Maven <server>/<repository> id written to settings.xml. Must match
+      the id a consuming pom.xml's <repositories><repository> declares,
+      otherwise Maven will not attach CodeArtifact credentials when resolving
+      dependencies (deploys are unaffected since they pipe the URL directly
+      via -DaltDeploymentRepository). Defaults to "codeartifact", the
+      convention documented across consuming repos.
+    required: false
+    default: codeartifact
+  token-env-var:
+    description: >
+      Name of the environment variable to export the masked CodeArtifact
+      authorization token as, available to every later step in the job —
+      following the same convention as aws-actions/configure-aws-credentials
+      (which exports AWS_* to $GITHUB_ENV) and AWS's own CodeArtifact docs
+      (which export CODEARTIFACT_AUTH_TOKEN the same way). This covers tools
+      that shell out to Maven internally (e.g. `databricks bundle deploy`)
+      and expect the token under a specific env var name. Set to an empty
+      string to skip the $GITHUB_ENV export entirely and rely on the `token`
+      output instead, scoped to just the step(s) that reference it.
+    required: false
+    default: CODEARTIFACT_AUTH_TOKEN
 
 outputs:
   codeartifact-domain:
@@ -40,6 +63,14 @@ outputs:
       Fully-composed CodeArtifact Maven repository URL. Pipe this to a later
       mvn step (e.g. -DaltDeploymentRepository / -Durl) instead of rebuilding it.
     value: "https://${{ inputs.codeartifact-domain }}-${{ inputs.codeartifact-domain-owner }}.d.codeartifact.${{ inputs.aws-region }}.amazonaws.com/maven/${{ inputs.codeartifact-repository }}/"
+  token:
+    description: >
+      The masked CodeArtifact authorization token. By default this is also
+      exported to $GITHUB_ENV (see the `token-env-var` input), so most
+      callers won't need this output directly. It's here for callers who set
+      `token-env-var` to an empty string and want to wire the token narrowly
+      onto just one step instead of the whole job.
+    value: ${{ steps.token.outputs.token }}
 
 runs:
   using: "composite"
@@ -53,14 +84,23 @@ runs:
     - name: Generate CodeArtifact Token
       id: token
       shell: bash
-      # Token is passed to the next step via a masked step output rather than
-      # $GITHUB_ENV, so it is not exposed as an env var to later steps. It is
-      # still embedded into ~/.m2/settings.xml, so the runner must be trusted.
+      # The token is masked and exported two ways: as this action's `token`
+      # output (always), and to $GITHUB_ENV under `token-env-var` (by
+      # default "CODEARTIFACT_AUTH_TOKEN", following the same convention as
+      # aws-actions/configure-aws-credentials and AWS's own CodeArtifact
+      # docs). The env export makes it ambiently available to every later
+      # step in the job, same as any other setup action's credentials —
+      # callers who'd rather scope it to a single step can set
+      # `token-env-var: ""` to skip the export and use the `token` output
+      # directly instead. Either way it's still embedded into
+      # ~/.m2/settings.xml, so the runner must be trusted for the job's
+      # duration regardless.
       env:
         CODEARTIFACT_DOMAIN: ${{ inputs.codeartifact-domain }}
         CODEARTIFACT_DOMAIN_OWNER: ${{ inputs.codeartifact-domain-owner }}
         AWS_REGION: ${{ inputs.aws-region }}
-      run: |
+        TOKEN_ENV_VAR: ${{ inputs.token-env-var }}
+      run: | # zizmor: ignore[github-env] -- token-env-var is a trusted input controlled by this action's own caller (a workflow author), not by pull_request_target/workflow_run event data; TOKEN is an AWS API response, not attacker-controlled
         TOKEN=$(aws codeartifact get-authorization-token \
           --domain "$CODEARTIFACT_DOMAIN" \
           --domain-owner "$CODEARTIFACT_DOMAIN_OWNER" \
@@ -69,6 +109,9 @@ runs:
           --output text)
         echo "::add-mask::$TOKEN"
         echo "token=$TOKEN" >> "$GITHUB_OUTPUT"
+        if [ -n "$TOKEN_ENV_VAR" ]; then
+          echo "${TOKEN_ENV_VAR}=${TOKEN}" >> "$GITHUB_ENV"
+        fi
 
     # settings.xml is written inline rather than via actions/setup-java's
     # generator. CodeArtifact needs both a <server> (credentials) and a
@@ -76,10 +119,19 @@ runs:
     # <servers> with ${env.*} credential placeholders, which would drop the
     # resolve repository and force the token into the environment at mvn time.
     # An inline writer also keeps this auth action JDK-agnostic.
+    #
+    # The <server> and <repository> ids must be IDENTICAL for Maven to attach
+    # credentials when resolving dependencies (deploys don't need this since
+    # they pipe the URL directly via -DaltDeploymentRepository=<id>::<url>).
+    # They previously used codeartifact-domain (e.g. "overture-scala"), which
+    # silently broke dependency resolution for any consumer whose pom.xml
+    # repository id didn't happen to match the domain name. Use the dedicated
+    # maven-repository-id input (default "codeartifact") instead, so the id is
+    # stable and matches the convention already documented in consuming repos.
     - name: Configure Maven Settings for CodeArtifact
       shell: bash
       env:
-        CODEARTIFACT_DOMAIN: ${{ inputs.codeartifact-domain }}
+        MAVEN_REPOSITORY_ID: ${{ inputs.maven-repository-id }}
         CODEARTIFACT_REPO_URL: "https://${{ inputs.codeartifact-domain }}-${{ inputs.codeartifact-domain-owner }}.d.codeartifact.${{ inputs.aws-region }}.amazonaws.com/maven/${{ inputs.codeartifact-repository }}/"
         CODEARTIFACT_TOKEN: ${{ steps.token.outputs.token }}
       run: |
@@ -90,7 +142,7 @@ runs:
                   xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.0.0 https://maven.apache.org/xsd/settings-1.0.0.xsd">
           <servers>
             <server>
-              <id>${CODEARTIFACT_DOMAIN}</id>
+              <id>${MAVEN_REPOSITORY_ID}</id>
               <username>aws</username>
               <password>${CODEARTIFACT_TOKEN}</password>
             </server>
@@ -100,7 +152,7 @@ runs:
               <id>codeartifact</id>
               <repositories>
                 <repository>
-                  <id>${CODEARTIFACT_DOMAIN}</id>
+                  <id>${MAVEN_REPOSITORY_ID}</id>
                   <url>${CODEARTIFACT_REPO_URL}</url>
                 </repository>
               </repositories>
