@@ -33,17 +33,17 @@ inputs:
     default: codeartifact
   token-env-var:
     description: >
-      Name of the environment variable to export the masked CodeArtifact
-      authorization token as, available to every later step in the job —
+      Opt-in: name of the environment variable to export the masked
+      CodeArtifact authorization token as, available to every later step in
+      the job. Empty by default, meaning no $GITHUB_ENV export happens and
+      callers only get the `token` output, scoped to whichever step(s)
+      explicitly reference it. Set this (e.g. to CODEARTIFACT_AUTH_TOKEN,
       following the same convention as aws-actions/configure-aws-credentials
-      (which exports AWS_* to $GITHUB_ENV) and AWS's own CodeArtifact docs
-      (which export CODEARTIFACT_AUTH_TOKEN the same way). This covers tools
-      that shell out to Maven internally (e.g. `databricks bundle deploy`)
-      and expect the token under a specific env var name. Set to an empty
-      string to skip the $GITHUB_ENV export entirely and rely on the `token`
-      output instead, scoped to just the step(s) that reference it.
+      and AWS's own CodeArtifact docs) only if you have a tool that shells
+      out to Maven internally (e.g. `databricks bundle deploy`) and expects
+      the token ambiently under a specific env var name.
     required: false
-    default: CODEARTIFACT_AUTH_TOKEN
+    default: ""
 
 outputs:
   codeartifact-domain:
@@ -65,11 +65,11 @@ outputs:
     value: "https://${{ inputs.codeartifact-domain }}-${{ inputs.codeartifact-domain-owner }}.d.codeartifact.${{ inputs.aws-region }}.amazonaws.com/maven/${{ inputs.codeartifact-repository }}/"
   token:
     description: >
-      The masked CodeArtifact authorization token. By default this is also
-      exported to $GITHUB_ENV (see the `token-env-var` input), so most
-      callers won't need this output directly. It's here for callers who set
-      `token-env-var` to an empty string and want to wire the token narrowly
-      onto just one step instead of the whole job.
+      The masked CodeArtifact authorization token. Use this to wire the
+      token narrowly onto just the step(s) that need it, e.g.
+      `env: MY_VAR: <expression referencing this output>`. It is not
+      exported to $GITHUB_ENV
+      unless the caller explicitly opts in via the `token-env-var` input.
     value: ${{ steps.token.outputs.token }}
 
 runs:
@@ -84,17 +84,19 @@ runs:
     - name: Generate CodeArtifact Token
       id: token
       shell: bash
-      # The token is masked and exported two ways: as this action's `token`
-      # output (always), and to $GITHUB_ENV under `token-env-var` (by
-      # default "CODEARTIFACT_AUTH_TOKEN", following the same convention as
+      # The token is masked and always exported as this action's `token`
+      # output, so callers can wire it narrowly onto just the step(s) that
+      # need it, e.g. `env: MY_VAR: <expression referencing this output>`. It
+      # is NOT written to $GITHUB_ENV by default -- that would make it
+      # ambiently readable by every later step in the job, which is broader
+      # exposure than most callers need. Set `token-env-var` (e.g. to
+      # "CODEARTIFACT_AUTH_TOKEN", following the same convention as
       # aws-actions/configure-aws-credentials and AWS's own CodeArtifact
-      # docs). The env export makes it ambiently available to every later
-      # step in the job, same as any other setup action's credentials —
-      # callers who'd rather scope it to a single step can set
-      # `token-env-var: ""` to skip the export and use the `token` output
-      # directly instead. Either way it's still embedded into
-      # ~/.m2/settings.xml, so the runner must be trusted for the job's
-      # duration regardless.
+      # docs) to opt in to the $GITHUB_ENV export for tools that shell out to
+      # Maven internally (e.g. `databricks bundle deploy`) and expect the
+      # token ambiently under a specific env var name. Either way it's still
+      # embedded into ~/.m2/settings.xml, so the runner must be trusted for
+      # the job's duration regardless.
       env:
         CODEARTIFACT_DOMAIN: ${{ inputs.codeartifact-domain }}
         CODEARTIFACT_DOMAIN_OWNER: ${{ inputs.codeartifact-domain-owner }}
