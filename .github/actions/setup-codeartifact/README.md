@@ -60,9 +60,10 @@ instead of re-specifying it:
 - `aws-region` — the AWS region.
 - `repository-url` — the fully-composed Maven repository URL
   (`https://<domain>-<owner>.d.codeartifact.<region>.amazonaws.com/maven/<repo>/`).
-
-The authorization token is intentionally **not** exposed as an output — it lives
-only in `settings.xml`.
+- `token` — the masked CodeArtifact authorization token. `~/.m2/settings.xml`
+  already has this embedded, so plain `mvn` steps don't need it. It exists for
+  tools that shell out to Maven internally and can't be pointed at that
+  `settings.xml` (see below).
 
 ```yaml
 - name: Authenticate with CodeArtifact
@@ -76,6 +77,36 @@ only in `settings.xml`.
 
 - name: Deploy with the piped URL
   run: mvn deploy -DaltDeploymentRepository="overture::${{ steps.ca.outputs.repository-url }}" --settings ~/.m2/settings.xml
+```
+
+### Using the token with tools that wrap Maven
+
+The token is intentionally passed via a masked step output rather than
+`$GITHUB_ENV`, so it isn't automatically exposed to every later step in the
+job — only steps that explicitly reference `steps.<id>.outputs.token` see it.
+
+Most callers never need it directly: `~/.m2/settings.xml` already embeds it
+for any plain `mvn` invocation. But some tools shell out to Maven internally
+using their own settings file or env var convention (e.g. `databricks bundle
+deploy` running a Maven build against a project's checked-in
+`.m2/settings.xml`, which expects the token via `${env.SOME_VAR}`). For those,
+wire the `token` output narrowly onto just the one step that needs it instead
+of exporting it job-wide:
+
+```yaml
+- name: Authenticate with CodeArtifact
+  id: ca
+  uses: OvertureMaps/workflows/.github/actions/setup-codeartifact@main
+  with:
+    aws-role-arn: arn:aws:iam::123456789012:role/codeartifact-publisher
+    codeartifact-domain: overture
+    codeartifact-domain-owner: "123456789012"
+    codeartifact-repository: maven-releases
+
+- name: Deploy via Databricks bundle (wraps its own Maven build)
+  env:
+    OVERTURE_CODEARTIFACT_AUTH_TOKEN: ${{ steps.ca.outputs.token }}
+  run: databricks bundle deploy
 ```
 
 ### Permissions
@@ -107,9 +138,16 @@ The authorization token is masked in logs and passed from the token step to the
 settings step via a step output (not `$GITHUB_ENV`), then embedded into the
 `~/.m2/settings.xml` written by an inline bash step (a `cat <<EOF` heredoc — no
 third-party action). Keeping it out of `$GITHUB_ENV` means it is not
-exposed as an environment variable to later steps — but `settings.xml` itself is
-readable by any subsequent step in the job, so still treat the runner as trusted
-for the duration of the job and call this action only in jobs you control.
+automatically exposed as an environment variable to every later step — but
+`settings.xml` itself is readable by any subsequent step in the job, so still
+treat the runner as trusted for the duration of the job and call this action
+only in jobs you control.
+
+The same masked value is also exposed as the action's `token` output, for
+callers who explicitly opt in (see [Using the token with tools that wrap
+Maven](#using-the-token-with-tools-that-wrap-maven)). This doesn't widen the
+exposure described above: an output only reaches a step that references
+`steps.<id>.outputs.token` by name, same as any other step output.
 
 ### Runtime
 

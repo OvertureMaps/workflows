@@ -50,6 +50,17 @@ outputs:
       Fully-composed CodeArtifact Maven repository URL. Pipe this to a later
       mvn step (e.g. -DaltDeploymentRepository / -Durl) instead of rebuilding it.
     value: "https://${{ inputs.codeartifact-domain }}-${{ inputs.codeartifact-domain-owner }}.d.codeartifact.${{ inputs.aws-region }}.amazonaws.com/maven/${{ inputs.codeartifact-repository }}/"
+  token:
+    description: >
+      The masked CodeArtifact authorization token. ~/.m2/settings.xml already
+      has this embedded for plain `mvn` invocations, so most callers don't
+      need this output. It exists for tools that shell out to Maven
+      internally (e.g. `databricks bundle deploy` running a Maven build) and
+      need the token as an env var on that one step. Wire it narrowly onto
+      just the step that needs it (see this action's README) — do not
+      forward it to $GITHUB_ENV, which would expose it to every later step
+      in the job.
+    value: ${{ steps.token.outputs.token }}
 
 runs:
   using: "composite"
@@ -63,9 +74,16 @@ runs:
     - name: Generate CodeArtifact Token
       id: token
       shell: bash
-      # Token is passed to the next step via a masked step output rather than
-      # $GITHUB_ENV, so it is not exposed as an env var to later steps. It is
-      # still embedded into ~/.m2/settings.xml, so the runner must be trusted.
+      # The token is passed to the next step (and exposed as this action's
+      # `token` output) via a masked step output rather than $GITHUB_ENV, so
+      # it is never automatically forwarded to every later step in the job.
+      # It is still embedded into ~/.m2/settings.xml, so the runner must be
+      # trusted. Most callers just need plain `mvn`, which already reads the
+      # token from settings.xml. Callers whose tooling shells out to Maven
+      # internally (e.g. `databricks bundle deploy`) and can't point it at
+      # that settings.xml can instead wire the `token` output explicitly and
+      # narrowly onto just the one step that needs it (see this action's
+      # README for an example).
       env:
         CODEARTIFACT_DOMAIN: ${{ inputs.codeartifact-domain }}
         CODEARTIFACT_DOMAIN_OWNER: ${{ inputs.codeartifact-domain-owner }}
