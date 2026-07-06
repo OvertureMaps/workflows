@@ -45,14 +45,15 @@ jobs:
 - `codeartifact-domain-owner` (**required**): AWS account ID that owns the CodeArtifact domain.
 - `codeartifact-repository` (**required**): CodeArtifact repository name.
 - `maven-repository-id` (optional): The Maven `<server>`/`<repository>` id written to `settings.xml`. Default `codeartifact`. Must match the id your `pom.xml`'s `<repositories><repository>` declares, otherwise Maven silently skips attaching CodeArtifact credentials when *resolving* dependencies (deploys are unaffected — see [The repository id must match](#the-repository-id-must-match) below). Only override this if your repo's convention differs from `codeartifact`.
+- `token-env-var` (optional): Name of the environment variable the masked CodeArtifact token is exported to via `$GITHUB_ENV`, available to every later step in the job. Default `CODEARTIFACT_AUTH_TOKEN`. Set to an empty string to skip the export and rely on the `token` output instead (see [Using the token with tools that wrap Maven](#using-the-token-with-tools-that-wrap-maven)).
 
 ### Outputs
 
 The action's primary effect is environmental: it acquires a CodeArtifact
-authorization token (masked, passed internally via a step output rather than
-`$GITHUB_ENV`) and writes `~/.m2/settings.xml`. It also echoes the CodeArtifact
-metadata back as outputs so later steps can pipe from a single source of truth
-instead of re-specifying it:
+authorization token (masked, exported to `$GITHUB_ENV` under `token-env-var`)
+and writes `~/.m2/settings.xml`. It also echoes the CodeArtifact metadata back
+as outputs so later steps can pipe from a single source of truth instead of
+re-specifying it:
 
 - `codeartifact-domain` — the domain name.
 - `codeartifact-domain-owner` — the owning AWS account ID.
@@ -60,10 +61,9 @@ instead of re-specifying it:
 - `aws-region` — the AWS region.
 - `repository-url` — the fully-composed Maven repository URL
   (`https://<domain>-<owner>.d.codeartifact.<region>.amazonaws.com/maven/<repo>/`).
-- `token` — the masked CodeArtifact authorization token. `~/.m2/settings.xml`
-  already has this embedded, so plain `mvn` steps don't need it. It exists for
-  tools that shell out to Maven internally and can't be pointed at that
-  `settings.xml` (see below).
+- `token` — the masked CodeArtifact authorization token. Only needed if you
+  set `token-env-var` to an empty string and want the token scoped to a single
+  step instead of the whole job (see below).
 
 ```yaml
 - name: Authenticate with CodeArtifact
@@ -81,17 +81,31 @@ instead of re-specifying it:
 
 ### Using the token with tools that wrap Maven
 
-The token is intentionally passed via a masked step output rather than
-`$GITHUB_ENV`, so it isn't automatically exposed to every later step in the
-job — only steps that explicitly reference `steps.<id>.outputs.token` see it.
-
-Most callers never need it directly: `~/.m2/settings.xml` already embeds it
-for any plain `mvn` invocation. But some tools shell out to Maven internally
-using their own settings file or env var convention (e.g. `databricks bundle
+By default the token is exported to `$GITHUB_ENV` as `CODEARTIFACT_AUTH_TOKEN`
+— the same convention used by `aws-actions/configure-aws-credentials` (which
+exports `AWS_*`) and AWS's own CodeArtifact docs — so it's ambiently available
+to every later step in the job, no extra wiring required. Tools that shell out
+to Maven internally using their own settings file (e.g. `databricks bundle
 deploy` running a Maven build against a project's checked-in
-`.m2/settings.xml`, which expects the token via `${env.SOME_VAR}`). For those,
-wire the `token` output narrowly onto just the one step that needs it instead
-of exporting it job-wide:
+`.m2/settings.xml`, which expects the token via `${env.SOME_VAR}`) can read it
+directly, renaming it via `token-env-var` if they expect a different name:
+
+```yaml
+- name: Authenticate with CodeArtifact
+  uses: OvertureMaps/workflows/.github/actions/setup-codeartifact@main
+  with:
+    aws-role-arn: arn:aws:iam::123456789012:role/codeartifact-publisher
+    codeartifact-domain: overture
+    codeartifact-domain-owner: "123456789012"
+    codeartifact-repository: maven-releases
+    token-env-var: OVERTURE_CODEARTIFACT_AUTH_TOKEN
+
+- name: Deploy via Databricks bundle (wraps its own Maven build)
+  run: databricks bundle deploy
+```
+
+If you'd rather not expose the token job-wide, set `token-env-var: ""` and
+wire the `token` output narrowly onto just the one step that needs it instead:
 
 ```yaml
 - name: Authenticate with CodeArtifact
@@ -102,6 +116,7 @@ of exporting it job-wide:
     codeartifact-domain: overture
     codeartifact-domain-owner: "123456789012"
     codeartifact-repository: maven-releases
+    token-env-var: ""
 
 - name: Deploy via Databricks bundle (wraps its own Maven build)
   env:
@@ -134,20 +149,22 @@ step in the same job resolve or deploy artifacts without bespoke setup.
 
 ### The token boundary
 
-The authorization token is masked in logs and passed from the token step to the
-settings step via a step output (not `$GITHUB_ENV`), then embedded into the
-`~/.m2/settings.xml` written by an inline bash step (a `cat <<EOF` heredoc — no
-third-party action). Keeping it out of `$GITHUB_ENV` means it is not
-automatically exposed as an environment variable to every later step — but
-`settings.xml` itself is readable by any subsequent step in the job, so still
-treat the runner as trusted for the duration of the job and call this action
-only in jobs you control.
+The authorization token is masked in logs and exported two ways: to
+`$GITHUB_ENV` under `token-env-var` (default `CODEARTIFACT_AUTH_TOKEN`), and
+as this action's `token` output — then embedded into the `~/.m2/settings.xml`
+written by an inline bash step (a `cat <<EOF` heredoc — no third-party
+action). The `$GITHUB_ENV` export follows the same convention used by
+`aws-actions/configure-aws-credentials` and AWS's own CodeArtifact docs: it
+makes the token ambiently available to every later step in the job, the same
+way those tokens are meant to be consumed by arbitrary AWS/Maven tooling.
+`settings.xml` is likewise readable by any subsequent step. Treat the runner
+as trusted for the duration of the job and call this action only in jobs you
+control — same expectation as any other credential-setup action.
 
-The same masked value is also exposed as the action's `token` output, for
-callers who explicitly opt in (see [Using the token with tools that wrap
-Maven](#using-the-token-with-tools-that-wrap-maven)). This doesn't widen the
-exposure described above: an output only reaches a step that references
-`steps.<id>.outputs.token` by name, same as any other step output.
+If you want the token scoped more narrowly than the whole job, set
+`token-env-var: ""` to skip the `$GITHUB_ENV` export and wire the `token`
+output onto just the step(s) that need it instead (see [Using the token with
+tools that wrap Maven](#using-the-token-with-tools-that-wrap-maven)).
 
 ### Runtime
 
