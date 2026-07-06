@@ -21,6 +21,16 @@ inputs:
   codeartifact-repository:
     description: CodeArtifact repository name
     required: true
+  maven-repository-id:
+    description: >
+      The Maven <server>/<repository> id written to settings.xml. Must match
+      the id a consuming pom.xml's <repositories><repository> declares,
+      otherwise Maven will not attach CodeArtifact credentials when resolving
+      dependencies (deploys are unaffected since they pipe the URL directly
+      via -DaltDeploymentRepository). Defaults to "codeartifact", the
+      convention documented across consuming repos.
+    required: false
+    default: codeartifact
 
 outputs:
   codeartifact-domain:
@@ -76,10 +86,19 @@ runs:
     # <servers> with ${env.*} credential placeholders, which would drop the
     # resolve repository and force the token into the environment at mvn time.
     # An inline writer also keeps this auth action JDK-agnostic.
+    #
+    # The <server> and <repository> ids must be IDENTICAL for Maven to attach
+    # credentials when resolving dependencies (deploys don't need this since
+    # they pipe the URL directly via -DaltDeploymentRepository=<id>::<url>).
+    # They previously used codeartifact-domain (e.g. "overture-scala"), which
+    # silently broke dependency resolution for any consumer whose pom.xml
+    # repository id didn't happen to match the domain name. Use the dedicated
+    # maven-repository-id input (default "codeartifact") instead, so the id is
+    # stable and matches the convention already documented in consuming repos.
     - name: Configure Maven Settings for CodeArtifact
       shell: bash
       env:
-        CODEARTIFACT_DOMAIN: ${{ inputs.codeartifact-domain }}
+        MAVEN_REPOSITORY_ID: ${{ inputs.maven-repository-id }}
         CODEARTIFACT_REPO_URL: "https://${{ inputs.codeartifact-domain }}-${{ inputs.codeartifact-domain-owner }}.d.codeartifact.${{ inputs.aws-region }}.amazonaws.com/maven/${{ inputs.codeartifact-repository }}/"
         CODEARTIFACT_TOKEN: ${{ steps.token.outputs.token }}
       run: |
@@ -90,7 +109,7 @@ runs:
                   xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.0.0 https://maven.apache.org/xsd/settings-1.0.0.xsd">
           <servers>
             <server>
-              <id>${CODEARTIFACT_DOMAIN}</id>
+              <id>${MAVEN_REPOSITORY_ID}</id>
               <username>aws</username>
               <password>${CODEARTIFACT_TOKEN}</password>
             </server>
@@ -100,7 +119,7 @@ runs:
               <id>codeartifact</id>
               <repositories>
                 <repository>
-                  <id>${CODEARTIFACT_DOMAIN}</id>
+                  <id>${MAVEN_REPOSITORY_ID}</id>
                   <url>${CODEARTIFACT_REPO_URL}</url>
                 </repository>
               </repositories>

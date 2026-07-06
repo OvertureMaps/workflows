@@ -44,6 +44,7 @@ jobs:
 - `codeartifact-domain` (**required**): CodeArtifact domain name.
 - `codeartifact-domain-owner` (**required**): AWS account ID that owns the CodeArtifact domain.
 - `codeartifact-repository` (**required**): CodeArtifact repository name.
+- `maven-repository-id` (optional): The Maven `<server>`/`<repository>` id written to `settings.xml`. Default `codeartifact`. Must match the id your `pom.xml`'s `<repositories><repository>` declares, otherwise Maven silently skips attaching CodeArtifact credentials when *resolving* dependencies (deploys are unaffected — see [The repository id must match](#the-repository-id-must-match) below). Only override this if your repo's convention differs from `codeartifact`.
 
 ### Outputs
 
@@ -116,3 +117,22 @@ The action pins `aws-actions/configure-aws-credentials` to v6.2.0, which runs on
 the Node.js 24 runtime. The `settings.xml` is written by an inline bash step
 rather than a third-party action, so this action carries no Node 20 runtime
 dependency.
+
+### The repository id must match
+
+Maven only attaches a `<server>`'s credentials to a `<repository>` when their
+`<id>` values are byte-for-byte identical. This action writes both the
+`<server>` and `<repository>` in `settings.xml` using the `maven-repository-id`
+input (default `codeartifact`) — **not** `codeartifact-domain` — specifically
+so it matches the id your `pom.xml`'s `<repositories><repository>` declares.
+
+If the ids don't match, `mvn` dependency *resolution* fails with a 401 from
+CodeArtifact as soon as the `actions/setup-java` Maven cache is cold (warm
+caches mask the bug because Maven never needs to hit the network). Publishing
+(`mvn deploy`) is unaffected either way, since it's piped a fully-qualified
+`-DaltDeploymentRepository=<id>::default::<url>` at the command line, bypassing
+`pom.xml` repository ids entirely.
+
+Keep your `pom.xml` repository id as `codeartifact` (the convention used by
+consuming repos) and you don't need to pass `maven-repository-id` at all.
+
