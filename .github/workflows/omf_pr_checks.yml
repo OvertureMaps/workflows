@@ -35,7 +35,8 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: none # no repository content access needed
-      pull-requests: read # to query PR metadata and closing issue references
+      pull-requests: write # to query PR metadata, closing issue references, and post/clear failure comments
+      issues: write # to post PR-related issue comments via sticky comment action
       statuses: write # to update commit status checks
     steps:
       - name: Check for linked issue

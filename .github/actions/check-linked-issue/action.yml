@@ -55,6 +55,7 @@ runs:
         owner: ${{ github.repository_owner }} # zizmor: ignore[github-app] -- intentional: org-wide reusable workflow; dedicated GH App limits risk in lieu of per-repo scoping
 
     - name: Check for linked issue via GraphQL
+      id: check_issue
       uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
       with:
         github-token: ${{ steps.app-token.outputs.token || github.token }}
@@ -104,15 +105,33 @@ runs:
           core.debug(`${JSON.stringify(result, null, 2)}`);
 
           if (!issues || issues.length < minimumLinkedIssues) {
-            core.setFailed(
-              `❌ This PR does not reference enough linked issues (found ${issues.length}, required ${minimumLinkedIssues})!\n` +
-              "Please link an issue from this repository, using 'Fixes #123', " +
-              "'Closes #123', or the GitHub UI " +
-              "(https://docs.github.com/en/issues/tracking-your-work-with-issues/using-issues/linking-a-pull-request-to-an-issue)\n" +
-              "After adding a linked issue, you may need to manually re-run this check from the Checks tab to update the status.\n"            );
+            const message =
+              `This PR does not reference enough linked issues (found ${issues.length}, required ${minimumLinkedIssues}).\n\n` +
+              "Please link an issue from this repository, using `Fixes #123`, `Closes #123`, or the " +
+              "[GitHub UI](https://docs.github.com/en/issues/tracking-your-work-with-issues/using-issues/linking-a-pull-request-to-an-issue).\n\n" +
+              "After adding a linked issue, you may need to manually re-run this check from the Checks tab to update the status.";
+            core.setOutput('error_message', message);
+            core.setFailed(`❌ ${message}`);
           } else {
             core.info(`✅ ${issues.length} linked issues found out of ${minimumLinkedIssues} required:`);
             issues.forEach(issue => {
               core.info(`  #${issue.number} - ${issue.title} (${issue.state}) ${issue.url}`);
             });
           }
+
+    - name: Post linked issue check failure comment
+      if: ${{ failure() && steps.check_issue.outputs.error_message != '' }}
+      uses: marocchino/sticky-pull-request-comment@0ea0beb66eb9baf113663a64ec522f60e49231c0 # v3.0.4
+      with:
+        header: check-linked-issue-error
+        message: |
+          ## ❌ Linked Issue Check Failed
+
+          ${{ steps.check_issue.outputs.error_message }}
+
+    - name: Delete comment on success
+      if: ${{ success() }}
+      uses: marocchino/sticky-pull-request-comment@0ea0beb66eb9baf113663a64ec522f60e49231c0 # v3.0.4
+      with:
+        header: check-linked-issue-error
+        delete: true
