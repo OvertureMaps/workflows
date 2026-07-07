@@ -36,6 +36,14 @@ inputs:
   aws-region:
     description: AWS region where CodeArtifact is hosted
     required: true
+  maven-repository-id:
+    description: >
+      The Maven <server>/<repository> id that setup-codeartifact wrote into
+      settings.xml in the same job. Must match that value, otherwise
+      deploy:deploy-file will not find the matching credentials. Defaults to
+      "codeartifact", the convention documented across consuming repos.
+    required: false
+    default: codeartifact
 
 runs:
   using: "composite"
@@ -93,7 +101,7 @@ runs:
       if: steps.check.outputs.exists == 'false'
       shell: bash
       env:
-        CODEARTIFACT_DOMAIN: ${{ inputs.codeartifact-domain }}
+        MAVEN_REPOSITORY_ID: ${{ inputs.maven-repository-id }}
         GROUP_ID: ${{ inputs.group-id }}
         ARTIFACT_ID: ${{ inputs.artifact-id }}
         VERSION: ${{ inputs.version }}
@@ -107,6 +115,6 @@ runs:
           -Dversion="$VERSION" \
           -Dpackaging=jar \
           -DgeneratePom=true \
-          -DrepositoryId="$CODEARTIFACT_DOMAIN" \
+          -DrepositoryId="$MAVEN_REPOSITORY_ID" \
           -Durl="$REPO_URL" \
           --settings ~/.m2/settings.xml

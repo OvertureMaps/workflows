@@ -60,6 +60,7 @@ Set `version` to publish a dev-named artifact. The pom version is overridden via
 - `codeartifact-domain` (**required**): CodeArtifact domain name.
 - `codeartifact-domain-owner` (**required**): AWS account ID that owns the CodeArtifact domain.
 - `codeartifact-repository` (**required**): CodeArtifact repository name.
+- `maven-repository-id` (optional): The Maven `<server>`/`<repository>` id used for CodeArtifact auth and deploy. Default `codeartifact`. Must match the id your `pom.xml`'s `<repositories><repository>` declares, otherwise Maven silently skips attaching CodeArtifact credentials when *resolving* dependencies. Only override this if your repo's convention differs from `codeartifact`.
 - `version` (optional): Artifact version override. When set, the pom version is overridden via `mvn versions:set` and the project is built with dev naming (`-Denv=dev`). When empty (default), the project's release version is published unchanged (`-Denv=release`).
 - `working-directory` (optional): Directory containing the Maven project (its `pom.xml` and `.java-version`). Defaults to the repository root (`.`). Set this to publish a project that lives in a subdirectory.
 - `commit` (optional): Commit SHA recorded as `build.commit` in the JAR manifest. Defaults to the checked-out workspace HEAD (`git rev-parse HEAD`), which matches the tree actually built — unlike `github.sha`, which is the merge-ref SHA on `pull_request` events. Override only if the build tree is not a git checkout.

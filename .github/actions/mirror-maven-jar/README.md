@@ -81,6 +81,7 @@ Use `jar-path` instead of `jar-url` for a JAR already on disk:
 - `codeartifact-domain-owner` (**required**): AWS account ID that owns the CodeArtifact domain.
 - `codeartifact-repository` (**required**): CodeArtifact repository name.
 - `aws-region` (**required**): AWS region where CodeArtifact is hosted.
+- `maven-repository-id` (optional): The Maven `<server>`/`<repository>` id that `setup-codeartifact` wrote into `settings.xml` in the same job. Default `codeartifact`. Must match that value, otherwise `deploy:deploy-file` will not find the matching credentials.
 
 ### Outputs
 

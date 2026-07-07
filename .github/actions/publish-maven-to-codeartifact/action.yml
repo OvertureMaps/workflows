@@ -21,6 +21,15 @@ inputs:
   codeartifact-repository:
     description: CodeArtifact repository name
     required: true
+  maven-repository-id:
+    description: >
+      The Maven <server>/<repository> id used for CodeArtifact auth and
+      deploy. Must match the id a consuming pom.xml's
+      <repositories><repository> declares, otherwise Maven will not attach
+      CodeArtifact credentials when resolving dependencies. Defaults to
+      "codeartifact", the convention documented across consuming repos.
+    required: false
+    default: codeartifact
   version:
     description: >
       Optional artifact version. When set, the pom version is overridden via
@@ -64,6 +73,7 @@ runs:
         codeartifact-domain: ${{ inputs.codeartifact-domain }}
         codeartifact-domain-owner: ${{ inputs.codeartifact-domain-owner }}
         codeartifact-repository: ${{ inputs.codeartifact-repository }}
+        maven-repository-id: ${{ inputs.maven-repository-id }}
 
     - name: Set dev version
       if: ${{ inputs.version != '' }}
@@ -81,7 +91,7 @@ runs:
       shell: bash
       working-directory: ${{ inputs.working-directory }}
       env:
-        CODEARTIFACT_DOMAIN: ${{ inputs.codeartifact-domain }}
+        MAVEN_REPOSITORY_ID: ${{ inputs.maven-repository-id }}
         CODEARTIFACT_REPO_URL: "https://${{ inputs.codeartifact-domain }}-${{ inputs.codeartifact-domain-owner }}.d.codeartifact.${{ inputs.aws-region }}.amazonaws.com/maven/${{ inputs.codeartifact-repository }}/"
         BUILD_ENV: ${{ inputs.version != '' && 'dev' || 'release' }}
         BUILD_BRANCH: ${{ github.ref_name }}
@@ -96,7 +106,7 @@ runs:
           BUILD_COMMIT=$(git rev-parse HEAD)
         fi
         mvn clean deploy -ntp \
-          -DaltDeploymentRepository="$CODEARTIFACT_DOMAIN::$CODEARTIFACT_REPO_URL" \
+          -DaltDeploymentRepository="$MAVEN_REPOSITORY_ID::$CODEARTIFACT_REPO_URL" \
           -Dbuild.branch="$BUILD_BRANCH" \
           -Dbuild.commit="$BUILD_COMMIT" \
           -Dworkflow.run_id="$WORKFLOW_RUN_ID" \
