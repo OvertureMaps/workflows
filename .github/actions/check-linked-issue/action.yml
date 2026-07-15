@@ -16,7 +16,7 @@ inputs:
       cross-repo linked issue reads. The numeric App ID also works here,
       as GitHub accepts either as the JWT issuer.
     required: false
-    default: "2932845" #https://github.com/organizations/OvertureMaps/settings/apps/overture-check-linked-issue
+    default: "Iv23liJL38m6IaQFoD60" #https://github.com/organizations/OvertureMaps/settings/apps/overture-check-linked-issue
   privateKey:
     description: >
       GitHub App private key used to generate an installation token.
