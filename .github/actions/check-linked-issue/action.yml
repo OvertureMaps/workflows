@@ -50,7 +50,7 @@ runs:
       if: ${{ inputs.privateKey != '' }}
       uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0 # zizmor: ignore[github-app,ref-version-mismatch] -- intentional: org-wide reusable workflow; dedicated GH App limits risk in lieu of per-repo scoping
       with:
-        app-id: ${{ inputs.appId }}
+        client-id: ${{ inputs.appId }} # accepts app ID or client ID; app-id input is deprecated
         private-key: ${{ inputs.privateKey }}
         owner: ${{ github.repository_owner }} # zizmor: ignore[github-app] -- intentional: org-wide reusable workflow; dedicated GH App limits risk in lieu of per-repo scoping
 
