@@ -112,7 +112,9 @@ permissions:
 
 - `privateKey` (**required**): Private key for the `overture-check-linked-issue` GitHub App, used to generate an installation token for cross-repo GraphQL reads. Pass `${{ secrets.CHECK_LINKED_ISSUE_APP_PEM }}`. The value must include the full PEM block with a trailing newline.
 
-- `appId` (optional): GitHub App ID. Defaults to `2932845` (the [Overture Check Linked Issues app](https://github.com/organizations/OvertureMaps/settings/apps/overture-check-linked-issue)) and does not normally need to be overridden.
+- `clientId` (optional): GitHub App client ID. Takes precedence over `appId` when set. Does not normally need to be overridden.
+
+- `appId` (optional, **deprecated** — use `clientId`): GitHub App ID. Defaults to `2932845` (the [Overture Check Linked Issues app](https://github.com/organizations/OvertureMaps/settings/apps/overture-check-linked-issue)) and does not normally need to be overridden.
 
 - `minimumLinkedIssues` (optional): Minimum number of linked issues required for the PR. Default is `1`. Set this input to require more than one linked issue:
 
