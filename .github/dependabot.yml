@@ -13,6 +13,10 @@ updates:
         patterns:
           - "actions/*"
           - "aws-actions/*"
+          - "github/*"
+      dflook:
+        patterns:
+          - "dflook/*"
     labels:
       - "bot"
     commit-message:
@@ -28,6 +32,15 @@ updates:
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 5
+    groups:
+      actions:
+        patterns:
+          - "actions/*"
+          - "aws-actions/*"
+          - "github/*"
+      dflook:
+        patterns:
+          - "dflook/*"
     labels:
       - "bot"
     commit-message:
