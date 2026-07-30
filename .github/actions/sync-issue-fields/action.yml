@@ -36,20 +36,34 @@ inputs:
 runs:
   using: composite
   steps:
-    - name: Parse issue form
-      id: parsed
-      uses: OvertureMaps/workflows/.github/actions/parse-issue-form@main # zizmor: ignore[unpinned-uses] -- trusted same-repo self-reference; pinned to the branch-protected default branch by design
+    - name: Fetch issue
+      id: fetch-issue
+      uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
       with:
         github-token: ${{ inputs.github-token }}
-        issue-number: ${{ inputs.issue-number }}
+        script: |
+          const issueNumber = parseInt(core.getInput('issue-number')) || context.issue.number;
+          const { owner, repo } = context.repo;
+          const { data: issue } = await github.rest.issues.get({ owner, repo, issue_number: issueNumber });
+
+          core.setOutput('issue-number', issueNumber);
+          core.setOutput('body', issue.body ?? '');
+          core.setOutput('type-name', issue.type?.name ?? '');
+          core.setOutput('field-values', JSON.stringify(issue.issue_field_values ?? []));
+
+    - name: Parse issue form
+      id: issue-parser
+      uses: stefanbuck/github-issue-parser@cb6e97157cbf851e3a393ff8d57c93a484cc323f # v3.2.5
+      with:
+        issue-body: ${{ steps.fetch-issue.outputs.body }}
 
     - name: Determine desired updates
       id: updates
       uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
       env:
-        ANSWERS: ${{ steps.parsed.outputs.answers }}
-        TYPE_NAME: ${{ steps.parsed.outputs.type-name }}
-        FIELD_VALUES: ${{ steps.parsed.outputs.field-values }}
+        ANSWERS: ${{ steps.issue-parser.outputs.jsonString }}
+        TYPE_NAME: ${{ steps.fetch-issue.outputs.type-name }}
+        FIELD_VALUES: ${{ steps.fetch-issue.outputs.field-values }}
         SCOPE_ORG_FIELD_ID: ${{ inputs.scope-org-field-id }}
       with:
         script: |
@@ -89,7 +103,7 @@ runs:
       with:
         github-token: ${{ inputs.github-token }}
         script: |
-          const issueNumber = parseInt('${{ steps.parsed.outputs.issue-number }}');
+          const issueNumber = parseInt('${{ steps.fetch-issue.outputs.issue-number }}');
           const { owner, repo } = context.repo;
 
           const patch = { owner, repo, issue_number: issueNumber };

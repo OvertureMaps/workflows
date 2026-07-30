@@ -2,10 +2,7 @@
 
 A composite GitHub Action that syncs an issue form's Type/Scope-style dropdown
 answers onto the repo-level issue `type` and an org-level issue field, without
-clobbering values already set by manual triage. It's built on
-[`parse-issue-form`](../parse-issue-form), the generic fetch-and-parse building
-block for issue-form automation, and is the first of what should grow into a
-small family of actions that act on form answers the same way.
+clobbering values already set by manual triage.
 
 - [How-to guides](#how-to-guides)
 - [Reference](#reference)
@@ -128,9 +125,9 @@ GitHub Actions has no way to trigger only for issues opened from a specific
 template, so this action always runs on every `issues: opened` event and has
 to cope with issues it wasn't meant for. Two layers handle that:
 
-- If `parse-issue-form`'s `answers` has neither `type-form-field` nor
-  `scope-form-field`, the action logs and returns without calling the API at
-  all. This is the common case for a free-form issue or one from an unrelated
+- If neither `type-form-field` nor `scope-form-field` shows up in the parsed
+  form answers, the action logs and returns without calling the API at all.
+  This is the common case for a free-form issue or one from an unrelated
   template.
 - If the issue does have those keys but with a value that doesn't match any
   enabled repo type or field option (a coincidentally-similar template, or a
@@ -138,18 +135,7 @@ to cope with issues it wasn't meant for. Two layers handle that:
   in a `try`/`catch`: the action logs a warning and moves on rather than
   failing the job.
 
-Both cases favor doing nothing over guessing. See
-[`parse-issue-form`'s own explanation](../parse-issue-form/README.md#handling-issues-that-dont-match-the-expected-template)
-for why there's no trigger-level fix for this.
-
-### Why this is built on `parse-issue-form`
-
-Fetching the issue and parsing its form answers is the same first step for
-any issue-form automation, not just this one. Splitting that out into
-[`parse-issue-form`](../parse-issue-form) means the next action that reacts
-to form answers (auto-assigning, auto-labeling, notifying elsewhere) reuses
-the fetch-and-parse step instead of re-implementing it, and this action's own
-logic is just "decide what to patch, then patch it."
+Both cases favor doing nothing over guessing.
 
 ### Why the field ID is hardcoded, not looked up by name
 
