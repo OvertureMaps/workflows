@@ -60,9 +60,20 @@ named `Scope`, point the action at them explicitly:
 
 ### Provide a separate token for the org-field lookup
 
-If `github-token` 403s on `GET /orgs/{org}/issue-fields` (see
-[The org-fields token question](#the-org-fields-token-question) below), pass a
-GitHub App's credentials to use for that one lookup instead:
+`GET /orgs/{org}/issue-fields` always 403s with `github-token` alone — see
+[The org-fields token requirement](#the-org-fields-token-requirement) below.
+Provide either a classic PAT with `read:org`:
+
+```yaml
+- name: Sync Type and Scope
+  uses: OvertureMaps/workflows/.github/actions/sync-issue-fields@main
+  with:
+    github-token: ${{ secrets.GITHUB_TOKEN }}
+    org-fields-token: ${{ secrets.ISSUE_FIELDS_READ_ORG_PAT }}
+```
+
+or a GitHub App's credentials, if you'd rather not hand out an org-wide
+`read:org` PAT:
 
 ```yaml
 - name: Sync Type and Scope
@@ -73,6 +84,8 @@ GitHub App's credentials to use for that one lookup instead:
     org-fields-private-key: ${{ secrets.SYNC_ISSUE_FIELDS_APP_PEM }}
 ```
 
+`org-fields-private-key` takes priority if both are set.
+
 ## Reference
 
 ### Inputs
@@ -81,7 +94,8 @@ GitHub App's credentials to use for that one lookup instead:
 - `type-form-field` (optional): Issue form field `id` holding the Type dropdown answer. Default `type`.
 - `scope-form-field` (optional): Issue form field `id` holding the Scope-equivalent dropdown answer. Default `scope`.
 - `scope-org-field-name` (optional): Name of the org-level issue field to write the `scope-form-field` answer to, looked up by name via `GET /orgs/{org}/issue-fields` since field IDs differ per org. Default `Scope`.
-- `org-fields-client-id` / `org-fields-private-key` (optional): GitHub App client ID and private key used to generate an installation token for the org-level field lookup only. Falls back to `github-token` when `org-fields-private-key` is empty. `org-fields-private-key` cannot be defaulted, as GitHub Actions doesn't allow secrets as input defaults — pass `${{ secrets.YOUR_APP_PEM }}`.
+- `org-fields-token` (optional): Classic PAT with `read:org`, used only for the org-level field lookup. Ignored if `org-fields-private-key` is set.
+- `org-fields-client-id` / `org-fields-private-key` (optional): GitHub App client ID and private key, an alternative to `org-fields-token` for the org-level field lookup, generating a short-lived installation token instead of handing out an org-wide PAT. `org-fields-private-key` cannot be defaulted, as GitHub Actions doesn't allow secrets as input defaults — pass `${{ secrets.YOUR_APP_PEM }}`.
 - `issue-number` (optional): Issue number to operate on. Defaults to the triggering issue (`context.issue.number`). Override for testing or non-`issues` triggers.
 
 ### Outputs
@@ -123,14 +137,21 @@ from the patch instead of overwriting it, so triaging an issue by hand before
 the action runs (or a slow trigger firing after someone's already set it)
 never gets reverted.
 
-### The org-fields token question
+### The org-fields token requirement
 
-GitHub's org-level Issue Fields REST docs mention `read:org` scope for
-PAT/OAuth callers of `GET /orgs/{org}/issue-fields`, and a field's visibility
-can be set to `organization_members_only`. Whether the default `GITHUB_TOKEN`
-from a repo-scoped workflow can read that endpoint is unverified without a
-live run against a real org. If it 403s, pass `org-fields-client-id` and
-`org-fields-private-key` for a GitHub App with org-level read access, mirroring
-the App-token pattern in [`check-linked-issue`](../check-linked-issue). That
-token is scoped narrowly to the one lookup step; the issue get/patch calls
-always use `github-token`.
+`GET /orgs/{org}/issue-fields` only accepts **classic PATs or OAuth app
+tokens with `read:org`** per [GitHub's REST docs](https://docs.github.com/en/rest/orgs/issue-fields)
+— no fine-grained PAT permission or `GITHUB_TOKEN` support is listed for this
+endpoint, unlike most other org-level REST endpoints. In practice this means
+`github-token` (including the default `GITHUB_TOKEN`) always 403s on the
+lookup step, regardless of the repo's `permissions:` block: the automatic
+token is a single-repo installation token and there's no way to grant it
+organization-level scope from a workflow.
+
+Use `org-fields-token` (a classic PAT with `read:org`, stored as a secret) for
+the simplest fix, or `org-fields-client-id`/`org-fields-private-key` for a
+GitHub App if you'd rather issue short-lived, auditable installation tokens
+instead of a long-lived org-wide PAT — mirroring the App-token pattern in
+[`check-linked-issue`](../check-linked-issue). Either way, that token is
+scoped narrowly to the one lookup step; the issue get/patch calls always use
+`github-token`.

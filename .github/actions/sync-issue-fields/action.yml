@@ -27,21 +27,31 @@ inputs:
       Composite action inputs cannot default to the github.token context, so
       callers must pass one explicitly, e.g. secrets.GITHUB_TOKEN.
     required: true
+  org-fields-token:
+    description: >
+      Classic personal access token with the read:org scope, used only for
+      the org-level issue field lookup. GET /orgs/{org}/issue-fields does not
+      accept GITHUB_TOKEN or fine-grained PATs — GitHub's docs list only
+      classic PAT/OAuth app tokens with read:org for this endpoint. Cannot be
+      defaulted automatically as GitHub Actions does not allow secrets as
+      input defaults. Ignored if org-fields-private-key is set; falls back to
+      github-token (which will 403) if neither is provided.
+    required: false
+    default: ""
   org-fields-client-id:
     description: >
       GitHub App client ID used to generate an installation token for the
-      org-level issue field lookup, if github-token cannot read
-      GET /orgs/{org}/issue-fields (e.g. because that field is visible to
-      organization_members_only). The numeric App ID also works here, as
-      GitHub accepts either as the JWT issuer.
+      org-level issue field lookup, as an alternative to org-fields-token.
+      The numeric App ID also works here, as GitHub accepts either as the
+      JWT issuer.
     required: false
     default: ""
   org-fields-private-key:
     description: >
       GitHub App private key used to generate an installation token for the
       org-level issue field lookup. Cannot be defaulted automatically as
-      GitHub Actions does not allow secrets as input defaults. When omitted,
-      falls back to github-token for that lookup.
+      GitHub Actions does not allow secrets as input defaults. Takes priority
+      over org-fields-token when both are set.
     required: false
     default: ""
   issue-number:
@@ -139,7 +149,7 @@ runs:
       if: ${{ steps.desired-updates.outputs.scope != '' }}
       uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
       with:
-        github-token: ${{ steps.app-token.outputs.token || inputs.github-token }}
+        github-token: ${{ steps.app-token.outputs.token || inputs.org-fields-token || inputs.github-token }}
         script: |
           const { owner } = context.repo;
           const scopeFieldName = core.getInput('scope-org-field-name');
