@@ -1,0 +1,19 @@
+name: TEMP - test sync-issue-fields
+
+on:
+  workflow_dispatch:
+    inputs:
+      issue-number:
+        required: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/sync-issue-fields
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          issue-number: ${{ github.event.inputs.issue-number }}
