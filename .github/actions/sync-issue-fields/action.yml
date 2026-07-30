@@ -100,10 +100,11 @@ runs:
         TYPE: ${{ steps.updates.outputs.type }}
         SCOPE: ${{ steps.updates.outputs.scope }}
         SCOPE_ORG_FIELD_ID: ${{ inputs.scope-org-field-id }}
+        ISSUE_NUMBER: ${{ steps.fetch-issue.outputs.issue-number }}
       with:
         github-token: ${{ inputs.github-token }}
         script: |
-          const issueNumber = parseInt('${{ steps.fetch-issue.outputs.issue-number }}');
+          const issueNumber = parseInt(process.env.ISSUE_NUMBER);
           const { owner, repo } = context.repo;
 
           const patch = { owner, repo, issue_number: issueNumber };
