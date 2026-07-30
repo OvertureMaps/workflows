@@ -89,6 +89,19 @@ trigger.
 
 ## Explanation
 
+### Why this exists
+
+Issue forms are the easiest way to get a reporter to pick a `Type` or `Scope`
+value at creation time, but a form dropdown answer only lives as plain text
+in the issue body. It doesn't filter issue search, doesn't drive board views,
+and doesn't show up in the repo-level `type` or org-level field's own UI,
+until something copies it over. Without this action, that copy step is
+manual: someone has to open the issue, read the form answer, then set the
+system `type` and the org field by hand, which is easy to skip or get wrong
+for high-volume repos with many incoming issues. This action does that copy
+automatically on `issues: opened`, so the form answer and the actual fields
+agree without a triager touching either.
+
 ### Why one PATCH for two fields
 
 Both writes happen in a single `PATCH /repos/{owner}/{repo}/issues/{issue_number}`
