@@ -40,14 +40,12 @@ jobs:
 > `uses: OvertureMaps/workflows/.github/actions/sync-issue-fields@<sha>`.
 
 This assumes an issue form with `type` and `scope` fields (matching the
-default `type-form-field`/`scope-form-field` inputs) and an org-level issue
-field named `Scope`. Nothing happens if the issue wasn't created from a
-template with those fields.
+default `type-form-field`/`scope-form-field` inputs). `scope-org-field-id`
+defaults to the OvertureMaps org's `Scope` field, so no further configuration
+is needed for repos in this org. Nothing happens if the issue wasn't created
+from a template with those fields.
 
-### Use different form field IDs or org field name
-
-If your issue form uses different field `id`s, or the org-level field isn't
-named `Scope`, point the action at them explicitly:
+### Use different form field IDs, or target a different org-level field
 
 ```yaml
 - name: Sync Type and Priority
@@ -55,36 +53,10 @@ named `Scope`, point the action at them explicitly:
   with:
     github-token: ${{ secrets.GITHUB_TOKEN }}
     scope-form-field: priority
-    scope-org-field-name: Priority
+    scope-org-field-id: "12345678" # OvertureMaps org's "Priority" field
 ```
 
-### Provide a separate token for the org-field lookup
-
-`GET /orgs/{org}/issue-fields` always 403s with `github-token` alone — see
-[The org-fields token requirement](#the-org-fields-token-requirement) below.
-Provide either a classic PAT with `read:org`:
-
-```yaml
-- name: Sync Type and Scope
-  uses: OvertureMaps/workflows/.github/actions/sync-issue-fields@main
-  with:
-    github-token: ${{ secrets.GITHUB_TOKEN }}
-    org-fields-token: ${{ secrets.ISSUE_FIELDS_READ_ORG_PAT }}
-```
-
-or a GitHub App's credentials, if you'd rather not hand out an org-wide
-`read:org` PAT:
-
-```yaml
-- name: Sync Type and Scope
-  uses: OvertureMaps/workflows/.github/actions/sync-issue-fields@main
-  with:
-    github-token: ${{ secrets.GITHUB_TOKEN }}
-    org-fields-client-id: "Iv23liXXXXXXXXXXXXXX"
-    org-fields-private-key: ${{ secrets.SYNC_ISSUE_FIELDS_APP_PEM }}
-```
-
-`org-fields-private-key` takes priority if both are set.
+Find an org-level field's ID with `gh api orgs/OvertureMaps/issue-fields`.
 
 ## Reference
 
@@ -93,9 +65,7 @@ or a GitHub App's credentials, if you'd rather not hand out an org-wide
 - `github-token` (**required**): Token with push access to the repo, used to read and patch the issue. Composite action inputs can't default to the `github.token` context, so this must be passed explicitly, e.g. `${{ secrets.GITHUB_TOKEN }}`.
 - `type-form-field` (optional): Issue form field `id` holding the Type dropdown answer. Default `type`.
 - `scope-form-field` (optional): Issue form field `id` holding the Scope-equivalent dropdown answer. Default `scope`.
-- `scope-org-field-name` (optional): Name of the org-level issue field to write the `scope-form-field` answer to, looked up by name via `GET /orgs/{org}/issue-fields` since field IDs differ per org. Default `Scope`.
-- `org-fields-token` (optional): Classic PAT with `read:org`, used only for the org-level field lookup. Ignored if `org-fields-private-key` is set.
-- `org-fields-client-id` / `org-fields-private-key` (optional): GitHub App client ID and private key, an alternative to `org-fields-token` for the org-level field lookup, generating a short-lived installation token instead of handing out an org-wide PAT. `org-fields-private-key` cannot be defaulted, as GitHub Actions doesn't allow secrets as input defaults — pass `${{ secrets.YOUR_APP_PEM }}`.
+- `scope-org-field-id` (optional): Numeric ID of the org-level issue field to write the `scope-form-field` answer to. Default `44814929`, the OvertureMaps org's `Scope` field. Override only to target a different org-level field.
 - `issue-number` (optional): Issue number to operate on. Defaults to the triggering issue (`context.issue.number`). Override for testing or non-`issues` triggers.
 
 ### Outputs
@@ -126,8 +96,7 @@ call, which accepts a `type` string param (the repo-level system field) and an
 `issue_field_values: [{field_id, value}]` array (org-level custom fields) —
 confirmed against the [GitHub REST API OpenAPI spec](https://raw.githubusercontent.com/github/rest-api-description/main/descriptions/api.github.com/dereferenced/api.github.com.deref.json)
 (`patch /repos/{owner}/{repo}/issues/{issue_number}`, properties `type` and
-`issue_field_values`). Both only require push access to the repo, no org-level
-token needed for the write side.
+`issue_field_values`). Both only require push access to the repo.
 
 ### Doesn't clobber manual triage
 
@@ -137,21 +106,18 @@ from the patch instead of overwriting it, so triaging an issue by hand before
 the action runs (or a slow trigger firing after someone's already set it)
 never gets reverted.
 
-### The org-fields token requirement
+### Why the field ID is hardcoded, not looked up by name
 
-`GET /orgs/{org}/issue-fields` only accepts **classic PATs or OAuth app
-tokens with `read:org`** per [GitHub's REST docs](https://docs.github.com/en/rest/orgs/issue-fields)
-— no fine-grained PAT permission or `GITHUB_TOKEN` support is listed for this
-endpoint, unlike most other org-level REST endpoints. In practice this means
-`github-token` (including the default `GITHUB_TOKEN`) always 403s on the
-lookup step, regardless of the repo's `permissions:` block: the automatic
-token is a single-repo installation token and there's no way to grant it
-organization-level scope from a workflow.
+`PATCH .../issues/{n}` needs a numeric `field_id`, and turning a field's name
+into that ID means calling `GET /orgs/{org}/issue-fields` — which [only
+accepts classic PATs or OAuth app tokens with `read:org`](https://docs.github.com/en/rest/orgs/issue-fields),
+not `GITHUB_TOKEN` or fine-grained PATs. That would mean shipping a whole
+second credential (a PAT or GitHub App) just to resolve a name this action
+only ever needs to resolve once.
 
-Use `org-fields-token` (a classic PAT with `read:org`, stored as a secret) for
-the simplest fix, or `org-fields-client-id`/`org-fields-private-key` for a
-GitHub App if you'd rather issue short-lived, auditable installation tokens
-instead of a long-lived org-wide PAT — mirroring the App-token pattern in
-[`check-linked-issue`](../check-linked-issue). Either way, that token is
-scoped narrowly to the one lookup step; the issue get/patch calls always use
-`github-token`.
+Since this action is OvertureMaps-only and org-level field IDs are stable
+once created, `scope-org-field-id` defaults directly to the numeric ID of the
+org's `Scope` field. That keeps the whole action running on nothing but
+`github-token`. If OvertureMaps ever needs to target a different org-level
+field, look its ID up once with `gh api orgs/OvertureMaps/issue-fields` and
+pass it via `scope-org-field-id` — no extra token required either way.

@@ -14,46 +14,21 @@ inputs:
     description: Issue form field `id` holding the Scope-equivalent dropdown answer
     required: false
     default: scope
-  scope-org-field-name:
+  scope-org-field-id:
     description: >
-      Name of the org-level issue field to write the scope-form-field answer
-      to. Looked up by name via GET /orgs/{org}/issue-fields since field IDs
-      differ per org.
+      Numeric ID of the org-level issue field to write the scope-form-field
+      answer to. Defaults to the OvertureMaps org's "Scope" field. Field IDs
+      are org-specific and stable once created; override this only if
+      targeting a different org-level field within OvertureMaps (e.g.
+      "Priority"), found via `gh api orgs/OvertureMaps/issue-fields`.
     required: false
-    default: Scope
+    default: "44814929"
   github-token:
     description: >
       Token with push access to the repo, used to read and patch the issue.
       Composite action inputs cannot default to the github.token context, so
       callers must pass one explicitly, e.g. secrets.GITHUB_TOKEN.
     required: true
-  org-fields-token:
-    description: >
-      Classic personal access token with the read:org scope, used only for
-      the org-level issue field lookup. GET /orgs/{org}/issue-fields does not
-      accept GITHUB_TOKEN or fine-grained PATs — GitHub's docs list only
-      classic PAT/OAuth app tokens with read:org for this endpoint. Cannot be
-      defaulted automatically as GitHub Actions does not allow secrets as
-      input defaults. Ignored if org-fields-private-key is set; falls back to
-      github-token (which will 403) if neither is provided.
-    required: false
-    default: ""
-  org-fields-client-id:
-    description: >
-      GitHub App client ID used to generate an installation token for the
-      org-level issue field lookup, as an alternative to org-fields-token.
-      The numeric App ID also works here, as GitHub accepts either as the
-      JWT issuer.
-    required: false
-    default: ""
-  org-fields-private-key:
-    description: >
-      GitHub App private key used to generate an installation token for the
-      org-level issue field lookup. Cannot be defaulted automatically as
-      GitHub Actions does not allow secrets as input defaults. Takes priority
-      over org-fields-token when both are set.
-    required: false
-    default: ""
   issue-number:
     description: >
       Issue number to operate on. Defaults to the triggering issue
@@ -74,8 +49,8 @@ runs:
           const { owner, repo } = context.repo;
           const { data: issue } = await github.rest.issues.get({ owner, repo, issue_number: issueNumber });
 
-          const scopeFieldName = core.getInput('scope-org-field-name');
-          const scopeSet = (issue.issue_field_values ?? []).some((v) => v.issue_field_name === scopeFieldName);
+          const scopeFieldId = parseInt(core.getInput('scope-org-field-id'));
+          const scopeSet = (issue.issue_field_values ?? []).some((v) => v.issue_field_id === scopeFieldId);
 
           core.setOutput('issue-number', issueNumber);
           core.setOutput('body', issue.body ?? '');
@@ -125,59 +100,19 @@ runs:
             core.setOutput('scope', scopeAnswer ?? '');
           }
 
-    - name: Mask private key
-      if: ${{ inputs.org-fields-private-key != '' }}
-      shell: bash
-      run: |
-        echo "::group::Masking private key"
-        echo "::add-mask::${INPUTS_ORG_FIELDS_PRIVATE_KEY}"
-        echo "::endgroup::"
-      env:
-        INPUTS_ORG_FIELDS_PRIVATE_KEY: ${{ inputs.org-fields-private-key }}
-
-    - name: Generate GitHub App token
-      id: app-token
-      if: ${{ inputs.org-fields-private-key != '' }}
-      uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0 # zizmor: ignore[github-app,ref-version-mismatch] -- intentional: optional narrow-scoped token used only for the org-level issue field lookup when github-token can't read it
-      with:
-        client-id: ${{ inputs.org-fields-client-id }}
-        private-key: ${{ inputs.org-fields-private-key }}
-        owner: ${{ github.repository_owner }} # zizmor: ignore[github-app] -- intentional: optional narrow-scoped token used only for the org-level issue field lookup when github-token can't read it
-
-    - name: Look up org-level field ID
-      id: org-field
-      if: ${{ steps.desired-updates.outputs.scope != '' }}
-      uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
-      with:
-        github-token: ${{ steps.app-token.outputs.token || inputs.org-fields-token || inputs.github-token }}
-        script: |
-          const { owner } = context.repo;
-          const scopeFieldName = core.getInput('scope-org-field-name');
-
-          // Field IDs are stable but looked up by name, since they differ per org.
-          const { data: orgFields } = await github.request('GET /orgs/{org}/issue-fields', { org: owner });
-          const scopeField = orgFields.find((f) => f.name === scopeFieldName);
-
-          if (!scopeField) {
-            core.warning(`No org-level "${scopeFieldName}" issue field found, skipping.`);
-            core.setOutput('field-id', '');
-          } else {
-            core.setOutput('field-id', scopeField.id);
-          }
-
     - name: Apply issue field updates
-      if: ${{ steps.desired-updates.outputs.type != '' || (steps.desired-updates.outputs.scope != '' && steps.org-field.outputs.field-id != '') }}
+      if: ${{ steps.desired-updates.outputs.type != '' || steps.desired-updates.outputs.scope != '' }}
       uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
       env:
         ISSUE_NUMBER: ${{ steps.fetch-issue.outputs.issue-number }}
         DESIRED_TYPE: ${{ steps.desired-updates.outputs.type }}
         DESIRED_SCOPE: ${{ steps.desired-updates.outputs.scope }}
-        SCOPE_FIELD_ID: ${{ steps.org-field.outputs.field-id }}
       with:
         github-token: ${{ inputs.github-token }}
         script: |
           const { owner, repo } = context.repo;
           const issue_number = parseInt(process.env.ISSUE_NUMBER);
+          const scopeFieldId = parseInt(core.getInput('scope-org-field-id'));
 
           // Type and Scope both set via a single PATCH: Type is a repo-level system field,
           // Scope (or the configured org field) is an org-level issue field. Both only
@@ -188,8 +123,8 @@ runs:
             patch.type = process.env.DESIRED_TYPE;
           }
 
-          if (process.env.DESIRED_SCOPE && process.env.SCOPE_FIELD_ID) {
-            patch.issue_field_values = [{ field_id: parseInt(process.env.SCOPE_FIELD_ID), value: process.env.DESIRED_SCOPE }];
+          if (process.env.DESIRED_SCOPE) {
+            patch.issue_field_values = [{ field_id: scopeFieldId, value: process.env.DESIRED_SCOPE }];
           }
 
           await github.request('PATCH /repos/{owner}/{repo}/issues/{issue_number}', {
