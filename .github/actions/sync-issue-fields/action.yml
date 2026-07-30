@@ -1,0 +1,188 @@
+---
+name: Sync Issue Fields
+description: >
+  Syncs an issue form's Type/Scope-style dropdown answers onto the repo-level
+  issue type and an org-level issue field, without clobbering values already
+  set by manual triage.
+
+inputs:
+  type-form-field:
+    description: Issue form field `id` holding the Type dropdown answer
+    required: false
+    default: type
+  scope-form-field:
+    description: Issue form field `id` holding the Scope-equivalent dropdown answer
+    required: false
+    default: scope
+  scope-org-field-name:
+    description: >
+      Name of the org-level issue field to write the scope-form-field answer
+      to. Looked up by name via GET /orgs/{org}/issue-fields since field IDs
+      differ per org.
+    required: false
+    default: Scope
+  github-token:
+    description: >
+      Token with push access to the repo, used to read and patch the issue.
+      Composite action inputs cannot default to the github.token context, so
+      callers must pass one explicitly, e.g. secrets.GITHUB_TOKEN.
+    required: true
+  org-fields-client-id:
+    description: >
+      GitHub App client ID used to generate an installation token for the
+      org-level issue field lookup, if github-token cannot read
+      GET /orgs/{org}/issue-fields (e.g. because that field is visible to
+      organization_members_only). The numeric App ID also works here, as
+      GitHub accepts either as the JWT issuer.
+    required: false
+    default: ""
+  org-fields-private-key:
+    description: >
+      GitHub App private key used to generate an installation token for the
+      org-level issue field lookup. Cannot be defaulted automatically as
+      GitHub Actions does not allow secrets as input defaults. When omitted,
+      falls back to github-token for that lookup.
+    required: false
+    default: ""
+  issue-number:
+    description: >
+      Issue number to operate on. Defaults to the triggering issue
+      (context.issue.number). Override for testing or non-issue-event triggers.
+    required: false
+    default: ""
+
+runs:
+  using: composite
+  steps:
+    - name: Fetch issue
+      id: fetch-issue
+      uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
+      with:
+        github-token: ${{ inputs.github-token }}
+        script: |
+          const issueNumber = parseInt(core.getInput('issue-number')) || context.issue.number;
+          const { owner, repo } = context.repo;
+          const { data: issue } = await github.rest.issues.get({ owner, repo, issue_number: issueNumber });
+
+          const scopeFieldName = core.getInput('scope-org-field-name');
+          const scopeSet = (issue.issue_field_values ?? []).some((v) => v.issue_field_name === scopeFieldName);
+
+          core.setOutput('issue-number', issueNumber);
+          core.setOutput('body', issue.body ?? '');
+          core.setOutput('type-name', issue.type?.name ?? '');
+          core.setOutput('scope-set', scopeSet);
+
+    - name: Parse issue form
+      id: issue-parser
+      uses: stefanbuck/github-issue-parser@cb6e97157cbf851e3a393ff8d57c93a484cc323f # v3.2.5
+      with:
+        issue-body: ${{ steps.fetch-issue.outputs.body }}
+
+    - name: Determine desired updates
+      id: desired-updates
+      uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
+      env:
+        JSON_STRING: ${{ steps.issue-parser.outputs.jsonString }}
+        EXISTING_TYPE_NAME: ${{ steps.fetch-issue.outputs.type-name }}
+        SCOPE_ALREADY_SET: ${{ steps.fetch-issue.outputs.scope-set }}
+      with:
+        script: |
+          const answers = JSON.parse(process.env.JSON_STRING || '{}');
+          const typeField = core.getInput('type-form-field');
+          const scopeField = core.getInput('scope-form-field');
+
+          const typeAnswer = answers[typeField];
+          const scopeAnswer = answers[scopeField];
+
+          if (!typeAnswer && !scopeAnswer) {
+            core.info("Issue wasn't created from a template with Type/Scope fields, skipping.");
+            core.setOutput('type', '');
+            core.setOutput('scope', '');
+            return;
+          }
+
+          if (typeAnswer && process.env.EXISTING_TYPE_NAME) {
+            core.info(`Type already set to "${process.env.EXISTING_TYPE_NAME}", leaving it alone.`);
+            core.setOutput('type', '');
+          } else {
+            core.setOutput('type', typeAnswer ?? '');
+          }
+
+          if (scopeAnswer && process.env.SCOPE_ALREADY_SET === 'true') {
+            core.info('Scope already set, leaving it alone.');
+            core.setOutput('scope', '');
+          } else {
+            core.setOutput('scope', scopeAnswer ?? '');
+          }
+
+    - name: Mask private key
+      if: ${{ inputs.org-fields-private-key != '' }}
+      shell: bash
+      run: |
+        echo "::group::Masking private key"
+        echo "::add-mask::${INPUTS_ORG_FIELDS_PRIVATE_KEY}"
+        echo "::endgroup::"
+      env:
+        INPUTS_ORG_FIELDS_PRIVATE_KEY: ${{ inputs.org-fields-private-key }}
+
+    - name: Generate GitHub App token
+      id: app-token
+      if: ${{ inputs.org-fields-private-key != '' }}
+      uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0 # zizmor: ignore[github-app,ref-version-mismatch] -- intentional: optional narrow-scoped token used only for the org-level issue field lookup when github-token can't read it
+      with:
+        client-id: ${{ inputs.org-fields-client-id }}
+        private-key: ${{ inputs.org-fields-private-key }}
+        owner: ${{ github.repository_owner }} # zizmor: ignore[github-app] -- intentional: optional narrow-scoped token used only for the org-level issue field lookup when github-token can't read it
+
+    - name: Look up org-level field ID
+      id: org-field
+      if: ${{ steps.desired-updates.outputs.scope != '' }}
+      uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
+      with:
+        github-token: ${{ steps.app-token.outputs.token || inputs.github-token }}
+        script: |
+          const { owner } = context.repo;
+          const scopeFieldName = core.getInput('scope-org-field-name');
+
+          // Field IDs are stable but looked up by name, since they differ per org.
+          const { data: orgFields } = await github.request('GET /orgs/{org}/issue-fields', { org: owner });
+          const scopeField = orgFields.find((f) => f.name === scopeFieldName);
+
+          if (!scopeField) {
+            core.warning(`No org-level "${scopeFieldName}" issue field found, skipping.`);
+            core.setOutput('field-id', '');
+          } else {
+            core.setOutput('field-id', scopeField.id);
+          }
+
+    - name: Apply issue field updates
+      if: ${{ steps.desired-updates.outputs.type != '' || (steps.desired-updates.outputs.scope != '' && steps.org-field.outputs.field-id != '') }}
+      uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
+      env:
+        ISSUE_NUMBER: ${{ steps.fetch-issue.outputs.issue-number }}
+        DESIRED_TYPE: ${{ steps.desired-updates.outputs.type }}
+        DESIRED_SCOPE: ${{ steps.desired-updates.outputs.scope }}
+        SCOPE_FIELD_ID: ${{ steps.org-field.outputs.field-id }}
+      with:
+        github-token: ${{ inputs.github-token }}
+        script: |
+          const { owner, repo } = context.repo;
+          const issue_number = parseInt(process.env.ISSUE_NUMBER);
+
+          // Type and Scope both set via a single PATCH: Type is a repo-level system field,
+          // Scope (or the configured org field) is an org-level issue field. Both only
+          // need push access to the repo.
+          const patch = {};
+
+          if (process.env.DESIRED_TYPE) {
+            patch.type = process.env.DESIRED_TYPE;
+          }
+
+          if (process.env.DESIRED_SCOPE && process.env.SCOPE_FIELD_ID) {
+            patch.issue_field_values = [{ field_id: parseInt(process.env.SCOPE_FIELD_ID), value: process.env.DESIRED_SCOPE }];
+          }
+
+          await github.request('PATCH /repos/{owner}/{repo}/issues/{issue_number}', {
+            owner, repo, issue_number, ...patch,
+          });
+          core.info(`Updated issue #${issue_number}: ${JSON.stringify(patch)}`);
