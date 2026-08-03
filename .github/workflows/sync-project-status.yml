@@ -1,0 +1,184 @@
+---
+# Keeps the Status field in sync for issues that belong to more than one
+# Overture ProjectV2 (currently Overture #84 and places-surge #78).
+#
+# ProjectsV2 has no workflow trigger for field edits, so this runs as a
+# scheduled batch job: for each issue present in multiple projects with
+# mismatched statuses, the most recently updated Status wins and is copied
+# to the other projects. Option names are matched case-insensitively
+# ("In Progress" vs "In progress").
+#
+# Auth: the default GITHUB_TOKEN cannot read or write org-level projects,
+# so this uses a dedicated GitHub App with:
+#   - Organization permissions: Projects read & write
+#   - Repository permissions: Issues read, Pull requests read
+# Configure vars.PROJECT_STATUS_SYNC_APP_CLIENT_ID and
+# secrets.PROJECT_STATUS_SYNC_APP_PEM in this repo.
+#
+name: Sync Project Status
+
+on:
+  schedule:
+    - cron: "17 */3 * * *"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Log intended changes without applying them"
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: none # operates purely on org projects via app token
+
+concurrency:
+  group: sync-project-status
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    name: Sync statuses
+    runs-on: ubuntu-slim
+    permissions:
+      contents: none
+    steps:
+      - name: Generate GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0 # zizmor: ignore[github-app] -- dedicated app scoped to org project sync
+        with:
+          client-id: ${{ vars.PROJECT_STATUS_SYNC_APP_CLIENT_ID }}
+          private-key: ${{ secrets.PROJECT_STATUS_SYNC_APP_PEM }} # zizmor: ignore[secrets-outside-env]
+          owner: ${{ github.repository_owner }} # zizmor: ignore[github-app] -- org-level project access is the point
+
+      - name: Sync project statuses
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          PROJECT_NUMBERS: "84,78" # Overture, places-surge
+          DRY_RUN: ${{ inputs.dry_run || 'false' }}
+        with:
+          github-token: ${{ steps.app-token.outputs.token }}
+          script: |
+            const org = context.repo.owner;
+            const projectNumbers = process.env.PROJECT_NUMBERS.split(',').map(Number);
+            const dryRun = process.env.DRY_RUN === 'true';
+
+            // Fetch a project's Status field and all non-archived items with
+            // their current Status value and when it was last set.
+            async function fetchProject(number) {
+              const project = { number, items: [] };
+              let cursor = null;
+              do {
+                const result = await github.graphql(`
+                  query($org: String!, $number: Int!, $cursor: String) {
+                    organization(login: $org) {
+                      projectV2(number: $number) {
+                        id
+                        title
+                        field(name: "Status") {
+                          ... on ProjectV2SingleSelectField {
+                            id
+                            options { id name }
+                          }
+                        }
+                        items(first: 100, after: $cursor) {
+                          pageInfo { hasNextPage endCursor }
+                          nodes {
+                            id
+                            isArchived
+                            content {
+                              ... on Issue { id number repository { nameWithOwner } }
+                              ... on PullRequest { id number repository { nameWithOwner } }
+                            }
+                            fieldValueByName(name: "Status") {
+                              ... on ProjectV2ItemFieldSingleSelectValue {
+                                name
+                                optionId
+                                updatedAt
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }`, { org, number, cursor });
+
+                const p = result.organization.projectV2;
+                project.id = p.id;
+                project.title = p.title;
+                project.statusField = p.field;
+                project.items.push(...p.items.nodes.filter(n => !n.isArchived && n.content?.id));
+                cursor = p.items.pageInfo.hasNextPage ? p.items.pageInfo.endCursor : null;
+              } while (cursor);
+              return project;
+            }
+
+            const projects = await Promise.all(projectNumbers.map(fetchProject));
+            for (const p of projects) {
+              if (!p.statusField?.options?.length) {
+                core.setFailed(`Project "${p.title}" (#${p.number}) has no Status single-select field.`);
+                return;
+              }
+              core.info(`Project "${p.title}" (#${p.number}): ${p.items.length} items`);
+            }
+
+            // Group items by issue/PR node ID across projects.
+            const byContent = new Map();
+            for (const project of projects) {
+              for (const item of project.items) {
+                const entry = byContent.get(item.content.id) ?? { content: item.content, items: [] };
+                entry.items.push({ project, item });
+                byContent.set(item.content.id, entry);
+              }
+            }
+
+            let synced = 0, conflicts = 0, skipped = 0;
+            for (const { content, items } of byContent.values()) {
+              if (items.length < 2) continue;
+
+              // Most recently updated status wins.
+              const source = items
+                .filter(e => e.item.fieldValueByName?.updatedAt)
+                .sort((a, b) => new Date(b.item.fieldValueByName.updatedAt) - new Date(a.item.fieldValueByName.updatedAt))[0];
+              if (!source) continue; // no project has a status set
+
+              const sourceStatus = source.item.fieldValueByName.name;
+              const ref = `${content.repository.nameWithOwner}#${content.number}`;
+
+              for (const target of items) {
+                if (target === source) continue;
+                const current = target.item.fieldValueByName?.name;
+                if (current?.toLowerCase() === sourceStatus.toLowerCase()) continue;
+
+                conflicts++;
+                const option = target.project.statusField.options
+                  .find(o => o.name.toLowerCase() === sourceStatus.toLowerCase());
+                if (!option) {
+                  skipped++;
+                  core.warning(`${ref}: project "${target.project.title}" has no Status option matching "${sourceStatus}", skipping.`);
+                  continue;
+                }
+
+                const action = dryRun ? 'would set' : 'setting';
+                core.info(`${ref}: ${action} "${target.project.title}" status ` +
+                  `"${current ?? '(unset)'}" -> "${option.name}" (source: "${source.project.title}")`);
+                if (!dryRun) {
+                  await github.graphql(`
+                    mutation($projectId: ID!, $itemId: ID!, $fieldId: ID!, $optionId: String!) {
+                      updateProjectV2ItemFieldValue(input: {
+                        projectId: $projectId
+                        itemId: $itemId
+                        fieldId: $fieldId
+                        value: { singleSelectOptionId: $optionId }
+                      }) { clientMutationId }
+                    }`, {
+                    projectId: target.project.id,
+                    itemId: target.item.id,
+                    fieldId: target.project.statusField.id,
+                    optionId: option.id,
+                  });
+                }
+                synced++;
+              }
+            }
+
+            core.notice(`Done: ${conflicts} mismatches found, ${synced} ${dryRun ? 'would be ' : ''}synced, ${skipped} skipped (no matching option).`);
