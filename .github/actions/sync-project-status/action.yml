@@ -36,7 +36,11 @@ runs:
       shell: bash
       run: |
         echo "::group::Masking private key"
-        echo "::add-mask::${INPUTS_PRIVATEKEY}"
+        # Mask line-by-line: a single ::add-mask:: on a multi-line PEM only
+        # registers the first line.
+        while IFS= read -r line; do
+          [ -n "$line" ] && echo "::add-mask::$line"
+        done <<< "$INPUTS_PRIVATEKEY"
         echo "::endgroup::"
       env:
         INPUTS_PRIVATEKEY: ${{ inputs.privateKey }}
@@ -59,10 +63,19 @@ runs:
         script: |
           const path = require('path');
           const run = require(path.join(process.env.GITHUB_ACTION_PATH, 'src', 'index.js'));
+          const projectNumbers = process.env.PROJECT_NUMBERS
+            .split(',')
+            .map((s) => s.trim())
+            .filter(Boolean)
+            .map(Number);
+          if (projectNumbers.length < 2 || projectNumbers.some((n) => !Number.isInteger(n) || n <= 0)) {
+            core.setFailed(`projectNumbers must be 2+ comma-separated positive integers, got "${process.env.PROJECT_NUMBERS}"`);
+            return;
+          }
           await run({
             github,
             core,
             org: context.repo.owner,
-            projectNumbers: process.env.PROJECT_NUMBERS.split(',').map(Number),
+            projectNumbers,
             dryRun: process.env.DRY_RUN === 'true',
           });

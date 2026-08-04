@@ -57,7 +57,7 @@ async function fetchProject(github, org, number) {
     project.id = p.id;
     project.title = p.title;
     project.statusField = p.field;
-    project.items.push(...p.items.nodes.filter((n) => !n.isArchived && n.content?.id));
+    project.items.push(...p.items.nodes.filter((n) => n && !n.isArchived && n.content?.id));
     cursor = p.items.pageInfo.hasNextPage ? p.items.pageInfo.endCursor : null;
   } while (cursor);
   return project;
