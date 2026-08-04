@@ -37,8 +37,9 @@ action mints an installation token from a dedicated GitHub App, which needs:
 ### Run on a schedule (how this repo uses it)
 
 See [`sync-project-status.yml`](../../workflows/sync-project-status.yml):
-checkout this repo, assume an IAM role via OIDC, fetch the app PEM from AWS
-Secrets Manager, then reference the action locally.
+checkout this repo, assume a narrow OIDC role, fetch the app PEM from AWS
+Secrets Manager, then reference the action locally. The role, secret, and
+GitHub App are managed in `omf-github-terraform`.
 
 ```yaml
 on:
@@ -63,19 +64,18 @@ jobs:
 
       - uses: aws-actions/configure-aws-credentials@v6
         with:
-          role-to-assume: ${{ vars.PROJECT_STATUS_SYNC_OIDC_ROLE_ARN }}
           aws-region: us-west-2
+          role-to-assume: arn:aws:iam::816069134238:role/gha-project-manager-secrets-reader
 
       - uses: aws-actions/aws-secretsmanager-get-secrets@v3
         with:
           secret-ids: |
-            PROJECT_STATUS_SYNC_APP_PEM,${{ vars.PROJECT_STATUS_SYNC_PEM_SECRET_ID }}
-          name-transformation: none
+            PROJECT_MANAGER_PEM, omf-github-terraform/project-manager/pem
 
       - uses: ./.github/actions/sync-project-status
         with:
-          clientId: ${{ vars.PROJECT_STATUS_SYNC_APP_CLIENT_ID }}
-          privateKey: ${{ env.PROJECT_STATUS_SYNC_APP_PEM }}
+          clientId: "Iv23limfwiJlCIqHPHrd" # overture-project-manager app, not sensitive
+          privateKey: ${{ env.PROJECT_MANAGER_PEM }}
           dryRun: ${{ inputs.dry_run || 'false' }}
 ```
 
