@@ -39,10 +39,12 @@ runs:
     - name: Fetch issue
       id: fetch-issue
       uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
+      env:
+        ISSUE_NUMBER_INPUT: ${{ inputs.issue-number }}
       with:
         github-token: ${{ inputs.github-token }}
         script: |
-          const issueNumber = parseInt(core.getInput('issue-number')) || context.issue.number;
+          const issueNumber = parseInt(process.env.ISSUE_NUMBER_INPUT) || context.issue.number;
           const { owner, repo } = context.repo;
           const { data: issue } = await github.rest.issues.get({ owner, repo, issue_number: issueNumber });
 
@@ -65,10 +67,12 @@ runs:
         TYPE_NAME: ${{ steps.fetch-issue.outputs.type-name }}
         FIELD_VALUES: ${{ steps.fetch-issue.outputs.field-values }}
         SCOPE_ORG_FIELD_ID: ${{ inputs.scope-org-field-id }}
+        TYPE_FORM_FIELD: ${{ inputs.type-form-field }}
+        SCOPE_FORM_FIELD: ${{ inputs.scope-form-field }}
       with:
         script: |
-          const typeFormField = core.getInput('type-form-field');
-          const scopeFormField = core.getInput('scope-form-field');
+          const typeFormField = process.env.TYPE_FORM_FIELD;
+          const scopeFormField = process.env.SCOPE_FORM_FIELD;
           const answers = JSON.parse(process.env.ANSWERS || '{}');
           const scopeOrgFieldId = parseInt(process.env.SCOPE_ORG_FIELD_ID);
 
