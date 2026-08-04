@@ -37,7 +37,8 @@ action mints an installation token from a dedicated GitHub App, which needs:
 ### Run on a schedule (how this repo uses it)
 
 See [`sync-project-status.yml`](../../workflows/sync-project-status.yml):
-checkout this repo, then reference the action locally.
+checkout this repo, assume an IAM role via OIDC, fetch the app PEM from AWS
+Secrets Manager, then reference the action locally.
 
 ```yaml
 on:
@@ -51,16 +52,30 @@ on:
 
 jobs:
   sync:
-    runs-on: ubuntu-slim
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # for OIDC authentication with AWS
     steps:
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
 
+      - uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ vars.PROJECT_STATUS_SYNC_OIDC_ROLE_ARN }}
+          aws-region: us-west-2
+
+      - uses: aws-actions/aws-secretsmanager-get-secrets@v3
+        with:
+          secret-ids: |
+            PROJECT_STATUS_SYNC_APP_PEM,${{ vars.PROJECT_STATUS_SYNC_PEM_SECRET_ID }}
+          name-transformation: none
+
       - uses: ./.github/actions/sync-project-status
         with:
           clientId: ${{ vars.PROJECT_STATUS_SYNC_APP_CLIENT_ID }}
-          privateKey: ${{ secrets.PROJECT_STATUS_SYNC_APP_PEM }}
+          privateKey: ${{ env.PROJECT_STATUS_SYNC_APP_PEM }}
           dryRun: ${{ inputs.dry_run || 'false' }}
 ```
 
@@ -75,9 +90,9 @@ Trigger the workflow manually with `dry_run` checked, or pass
 
 - `clientId` (**required**): Client ID of the GitHub App used to mint the
   installation token.
-- `privateKey` (**required**): Private key for the app. Pass
-  `${{ secrets.PROJECT_STATUS_SYNC_APP_PEM }}`. Include the full PEM block
-  with a trailing newline.
+- `privateKey` (**required**): Private key for the app, e.g. fetched from
+  AWS Secrets Manager via `aws-actions/aws-secretsmanager-get-secrets`.
+  Include the full PEM block with a trailing newline.
 - `projectNumbers` (optional): Comma-separated org project numbers to sync.
   Defaults to `84,78` (Overture, places-surge).
 - `dryRun` (optional): `"true"` to log intended changes without applying

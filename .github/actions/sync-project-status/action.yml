@@ -23,9 +23,10 @@ inputs:
     required: true
   privateKey:
     description: >
-      GitHub App private key. Pass secrets.PROJECT_STATUS_SYNC_APP_PEM.
-      Cannot be defaulted automatically as GitHub Actions does not allow
-      secrets as input defaults.
+      GitHub App private key, e.g. fetched from AWS Secrets Manager via
+      aws-actions/aws-secretsmanager-get-secrets. Cannot be defaulted
+      automatically as GitHub Actions does not allow secrets as input
+      defaults.
     required: true
 
 runs:
