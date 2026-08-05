@@ -1,0 +1,132 @@
+---
+name: Sync Issue Fields
+description: >
+  Writes an issue's Type and Scope form answers onto the repo-level issue
+  type and an org-level issue field, skipping any that are already set.
+
+inputs:
+  type-form-field:
+    description: Issue form field `id` for the Type dropdown
+    required: false
+    default: "type"
+  scope-form-field:
+    description: Issue form field `id` for the Scope-equivalent dropdown
+    required: false
+    default: "scope"
+  scope-org-field-id:
+    description: >
+      Numeric ID of the org-level issue field to write the scope answer to.
+      Defaults to OvertureMaps' own "Scope" field. Field IDs are per-org, so
+      override this when using the action outside OvertureMaps.
+    required: false
+    default: "44814929"
+  github-token:
+    description: >
+      Token with push access to the repo, used to read and update the
+      issue. Composite action inputs cannot default to the github.token
+      context, so callers must pass one explicitly, e.g. secrets.GITHUB_TOKEN.
+    required: true
+  issue-number:
+    description: >
+      Issue number to sync. Defaults to the triggering issue
+      (context.issue.number). Override for testing or non-issue-event triggers.
+    required: false
+    default: ""
+
+runs:
+  using: composite
+  steps:
+    - name: Fetch issue
+      id: fetch-issue
+      uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
+      env:
+        ISSUE_NUMBER_INPUT: ${{ inputs.issue-number }}
+      with:
+        github-token: ${{ inputs.github-token }}
+        script: |
+          const issueNumber = parseInt(process.env.ISSUE_NUMBER_INPUT) || context.issue.number;
+          const { owner, repo } = context.repo;
+          const { data: issue } = await github.rest.issues.get({ owner, repo, issue_number: issueNumber });
+
+          core.setOutput('issue-number', issueNumber);
+          core.setOutput('body', issue.body ?? '');
+          core.setOutput('type-name', issue.type?.name ?? '');
+          core.setOutput('field-values', JSON.stringify(issue.issue_field_values ?? []));
+
+    - name: Parse issue form
+      id: issue-parser
+      uses: stefanbuck/github-issue-parser@cb6e97157cbf851e3a393ff8d57c93a484cc323f # v3.2.5
+      with:
+        issue-body: ${{ steps.fetch-issue.outputs.body }}
+
+    - name: Determine desired updates
+      id: updates
+      uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
+      env:
+        ANSWERS: ${{ steps.issue-parser.outputs.jsonString }}
+        TYPE_NAME: ${{ steps.fetch-issue.outputs.type-name }}
+        FIELD_VALUES: ${{ steps.fetch-issue.outputs.field-values }}
+        SCOPE_ORG_FIELD_ID: ${{ inputs.scope-org-field-id }}
+        TYPE_FORM_FIELD: ${{ inputs.type-form-field }}
+        SCOPE_FORM_FIELD: ${{ inputs.scope-form-field }}
+      with:
+        script: |
+          const typeFormField = process.env.TYPE_FORM_FIELD;
+          const scopeFormField = process.env.SCOPE_FORM_FIELD;
+          const answers = JSON.parse(process.env.ANSWERS || '{}');
+          const scopeOrgFieldId = parseInt(process.env.SCOPE_ORG_FIELD_ID);
+
+          if (!answers[typeFormField] && !answers[scopeFormField]) {
+            core.info("Issue has no Type/Scope form answers (not created from the expected template), skipping.");
+            return;
+          }
+
+          const typeAnswer = answers[typeFormField];
+          if (typeAnswer && process.env.TYPE_NAME) {
+            core.info(`Issue type is already set to "${process.env.TYPE_NAME}", not overwriting.`);
+          } else if (typeAnswer) {
+            core.setOutput('type', typeAnswer);
+          }
+
+          const scopeAnswer = answers[scopeFormField];
+          const fieldValues = JSON.parse(process.env.FIELD_VALUES || '[]');
+          const scopeAlreadySet = fieldValues.some((f) => f.issue_field_id === scopeOrgFieldId);
+          if (scopeAnswer && scopeAlreadySet) {
+            core.info(`Org-level field ${scopeOrgFieldId} is already set, not overwriting.`);
+          } else if (scopeAnswer) {
+            core.setOutput('scope', scopeAnswer);
+          }
+
+    - name: Apply issue field updates
+      if: steps.updates.outputs.type || steps.updates.outputs.scope
+      uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
+      env:
+        TYPE: ${{ steps.updates.outputs.type }}
+        SCOPE: ${{ steps.updates.outputs.scope }}
+        SCOPE_ORG_FIELD_ID: ${{ inputs.scope-org-field-id }}
+        ISSUE_NUMBER: ${{ steps.fetch-issue.outputs.issue-number }}
+      with:
+        github-token: ${{ inputs.github-token }}
+        script: |
+          const issueNumber = parseInt(process.env.ISSUE_NUMBER);
+          const { owner, repo } = context.repo;
+
+          const patch = { owner, repo, issue_number: issueNumber };
+          if (process.env.TYPE) {
+            patch.type = process.env.TYPE;
+          }
+          if (process.env.SCOPE) {
+            patch.issue_field_values = [{
+              field_id: parseInt(process.env.SCOPE_ORG_FIELD_ID),
+              value: process.env.SCOPE,
+            }];
+          }
+
+          try {
+            await github.request('PATCH /repos/{owner}/{repo}/issues/{issue_number}', patch);
+            core.info(`Updated issue #${issueNumber}: ${JSON.stringify(patch)}`);
+          } catch (error) {
+            // A non-standard template can produce a "type"/"scope"-shaped answer whose value
+            // doesn't match any enabled repo type or field option (422). Warn, don't fail the job.
+            core.warning(`Couldn't update issue #${issueNumber}, the Type/Scope value may not be valid for this repo: ${error.message}`);
+          }
