@@ -23,10 +23,11 @@ inputs:
     required: true
   privateKey:
     description: >
-      GitHub App private key, e.g. fetched from AWS Secrets Manager via
-      aws-actions/aws-secretsmanager-get-secrets. Cannot be defaulted
-      automatically as GitHub Actions does not allow secrets as input
-      defaults.
+      GitHub App private key. Must come from an already-masked source: a
+      GitHub Actions secret or aws-actions/aws-secretsmanager-get-secrets
+      (both register masks at fetch time). This action re-masks the value
+      as defense in depth, but that cannot cover the value's handling
+      before it reaches this action.
     required: true
 
 runs:
@@ -36,8 +37,11 @@ runs:
       shell: bash
       run: |
         echo "::group::Masking private key"
-        # Mask line-by-line: a single ::add-mask:: on a multi-line PEM only
-        # registers the first line.
+        # Defense in depth only: the PEM already crossed a step boundary as
+        # an input, so the caller's source must register its own masks
+        # (GitHub secrets and aws-secretsmanager-get-secrets both do).
+        # Line-by-line because a single ::add-mask:: on a multi-line value
+        # only registers the first line.
         while IFS= read -r line; do
           [ -n "$line" ] && echo "::add-mask::$line"
         done <<< "$INPUTS_PRIVATEKEY"

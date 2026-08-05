@@ -90,9 +90,12 @@ Trigger the workflow manually with `dry_run` checked, or pass
 
 - `clientId` (**required**): Client ID of the GitHub App used to mint the
   installation token.
-- `privateKey` (**required**): Private key for the app, e.g. fetched from
-  AWS Secrets Manager via `aws-actions/aws-secretsmanager-get-secrets`.
-  Include the full PEM block with a trailing newline.
+- `privateKey` (**required**): Private key for the app. Must come from an
+  already-masked source (a GitHub Actions secret, or
+  `aws-actions/aws-secretsmanager-get-secrets` as this repo does): the
+  action re-masks the value line-by-line as defense in depth, but it cannot
+  mask the value's handling before it arrives as an input. Include the full
+  PEM block with a trailing newline.
 - `projectNumbers` (optional): Comma-separated org project numbers to sync.
   Defaults to `84,78` (Overture, places-surge).
 - `dryRun` (optional): `"true"` to log intended changes without applying
