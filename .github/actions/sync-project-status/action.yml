@@ -8,6 +8,8 @@ description: >
 
 inputs:
   projectNumbers:
+    # A project's number is in its URL: github.com/orgs/OvertureMaps/projects/<number>.
+    # The app must also be granted access to it in the org's app installation settings.
     description: Comma-separated org project numbers to sync
     required: false
     default: "84,78" # Overture, places-surge
