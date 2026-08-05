@@ -1,0 +1,87 @@
+---
+name: Sync Project Status
+description: >
+  Keeps the Status field in sync for issues that belong to more than one
+  org-level ProjectV2. For each issue in multiple projects with mismatched
+  statuses, the most recently updated Status wins and is copied to the
+  others. Option names are matched case-insensitively.
+
+inputs:
+  projectNumbers:
+    # A project's number is in its URL: github.com/orgs/OvertureMaps/projects/<number>.
+    # The app must also be granted access to it in the org's app installation settings.
+    description: Comma-separated org project numbers to sync
+    required: false
+    default: "84,78,54" # Overture, places-surge, CloudDevOps
+  dryRun:
+    description: Log intended changes without applying them
+    required: false
+    default: "false"
+  clientId:
+    description: >
+      GitHub App client ID used to generate an installation token with
+      org-level Projects read & write access. The default GITHUB_TOKEN
+      cannot read or write org ProjectsV2.
+    required: true
+  privateKey:
+    description: >
+      GitHub App private key. Must come from an already-masked source: a
+      GitHub Actions secret or aws-actions/aws-secretsmanager-get-secrets
+      (both register masks at fetch time). This action re-masks the value
+      as defense in depth, but that cannot cover the value's handling
+      before it reaches this action.
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Mask private key
+      shell: bash
+      run: |
+        echo "::group::Masking private key"
+        # Defense in depth only: the PEM already crossed a step boundary as
+        # an input, so the caller's source must register its own masks
+        # (GitHub secrets and aws-secretsmanager-get-secrets both do).
+        # Line-by-line because a single ::add-mask:: on a multi-line value
+        # only registers the first line.
+        while IFS= read -r line; do
+          [ -n "$line" ] && echo "::add-mask::$line"
+        done <<< "$INPUTS_PRIVATEKEY"
+        echo "::endgroup::"
+      env:
+        INPUTS_PRIVATEKEY: ${{ inputs.privateKey }}
+
+    - name: Generate GitHub App token
+      id: app-token
+      uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0 # zizmor: ignore[github-app,ref-version-mismatch] -- dedicated app scoped to org project sync
+      with:
+        client-id: ${{ inputs.clientId }}
+        private-key: ${{ inputs.privateKey }}
+        owner: ${{ github.repository_owner }} # zizmor: ignore[github-app] -- org-level project access is the point
+
+    - name: Sync project statuses
+      uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+      env:
+        PROJECT_NUMBERS: ${{ inputs.projectNumbers }}
+        DRY_RUN: ${{ inputs.dryRun }}
+      with:
+        github-token: ${{ steps.app-token.outputs.token }}
+        script: |
+          const path = require('path');
+          const run = require(path.join(process.env.GITHUB_ACTION_PATH, 'src', 'index.js'));
+          const projectNumbers = process.env.PROJECT_NUMBERS
+            .split(',')
+            .map((s) => s.trim())
+            .filter(Boolean)
+            .map(Number);
+          if (projectNumbers.length < 2 || projectNumbers.some((n) => !Number.isInteger(n) || n <= 0)) {
+            core.setFailed(`projectNumbers must be 2+ comma-separated positive integers, got "${process.env.PROJECT_NUMBERS}"`);
+            return;
+          }
+          await run({
+            github,
+            core,
+            org: context.repo.owner,
+            projectNumbers,
+            dryRun: process.env.DRY_RUN === 'true',
+          });
