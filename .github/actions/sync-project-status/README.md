@@ -97,7 +97,7 @@ Trigger the workflow manually with `dry_run` checked, or pass
   mask the value's handling before it arrives as an input. Include the full
   PEM block with a trailing newline.
 - `projectNumbers` (optional): Comma-separated org project numbers to sync.
-  Defaults to `84,78` (Overture, places-surge).
+  Defaults to `84,78,54` (Overture, places-surge, CloudDevOps).
 - `dryRun` (optional): `"true"` to log intended changes without applying
   them. Defaults to `"false"`.
 

@@ -1,6 +1,7 @@
 ---
 # Keeps the Status field in sync for issues that belong to more than one
-# Overture ProjectV2 (currently Overture #84 and places-surge #78).
+# Overture ProjectV2 (currently Overture #84, places-surge #78, and
+# CloudDevOps #54).
 #
 # ProjectsV2 has no workflow trigger for field edits, so this runs as a
 # scheduled batch job. Sync logic lives in .github/actions/sync-project-status;
