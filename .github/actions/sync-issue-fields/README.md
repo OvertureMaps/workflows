@@ -1,7 +1,7 @@
 # Sync Issue Fields <!-- omit in toc -->
 
-A composite GitHub Action that syncs an issue form's Type/Scope-style dropdown
-answers onto the repo-level issue `type` and an org-level issue field, without
+A composite GitHub Action that syncs an issue form's dropdown answers onto
+the repo-level issue `type` and any number of org-level issue fields, without
 clobbering values already set by manual triage.
 
 - [How-to guides](#how-to-guides)
@@ -39,24 +39,25 @@ jobs:
 > Pin to a commit SHA rather than `@main` for reproducible builds, e.g.
 > `uses: OvertureMaps/workflows/.github/actions/sync-issue-fields@<sha>`.
 
-This assumes an issue form with `type` and `scope` fields (matching the
-default `type-form-field`/`scope-form-field` inputs). `scope-org-field-id`
-defaults to the OvertureMaps org's `Scope` field, so no further configuration
-is needed for repos in this org. Nothing happens if the issue wasn't created
-from a template with those fields.
+This assumes an issue form with `type`, `scope`, and `skillset` fields
+(matching the default `type-form-field` input and the `org-fields` default
+below). No further configuration is needed for repos in this org. Nothing
+happens if the issue wasn't created from a template with those fields.
 
-### Use different form field IDs, or target a different org-level field
+### Use different form field IDs, or target different org-level fields
 
 ```yaml
 - name: Sync Type and Priority
   uses: OvertureMaps/workflows/.github/actions/sync-issue-fields@main
   with:
     github-token: ${{ secrets.GITHUB_TOKEN }}
-    scope-form-field: priority
-    scope-org-field-id: "12345678" # OvertureMaps org's "Priority" field
+    org-fields: |
+      priority=12345678
 ```
 
-Find an org-level field's ID with `gh api orgs/OvertureMaps/issue-fields`.
+Each line of `org-fields` is a `form-field=org-field-id` pair: the issue form
+field `id` on the left, the numeric org-level field ID it's synced to on the
+right. Find a field's ID with `gh api orgs/OvertureMaps/issue-fields`.
 
 ## Reference
 
@@ -64,8 +65,12 @@ Find an org-level field's ID with `gh api orgs/OvertureMaps/issue-fields`.
 
 - `github-token` (**required**): Token with push access to the repo, used to read and patch the issue. Composite action inputs can't default to the `github.token` context, so this must be passed explicitly, e.g. `${{ secrets.GITHUB_TOKEN }}`.
 - `type-form-field` (optional): Issue form field `id` holding the Type dropdown answer. Default `type`.
-- `scope-form-field` (optional): Issue form field `id` holding the Scope-equivalent dropdown answer. Default `scope`.
-- `scope-org-field-id` (optional): Numeric ID of the org-level issue field to write the `scope-form-field` answer to. Default `44814929`, the OvertureMaps org's `Scope` field. Override only to target a different org-level field.
+- `org-fields` (optional): Newline-separated `form-field=org-field-id` pairs mapping issue form field `id`s to org-level issue field IDs. Default:
+  ```
+  scope=44814929
+  skillset=45229885
+  ```
+  The OvertureMaps org's `Scope` and `Skillset` fields. Override to add, remove, or repoint mapped fields.
 - `issue-number` (optional): Issue number to operate on. Defaults to the triggering issue (`context.issue.number`). Override for testing or non-`issues` triggers.
 
 ### Outputs
@@ -102,14 +107,15 @@ for high-volume repos with many incoming issues. This action does that copy
 automatically on `issues: opened`, so the form answer and the actual fields
 agree without a triager touching either.
 
-### Why one PATCH for two fields
+### Why one PATCH for every field
 
-Both writes happen in a single `PATCH /repos/{owner}/{repo}/issues/{issue_number}`
+All writes happen in a single `PATCH /repos/{owner}/{repo}/issues/{issue_number}`
 call, which accepts a `type` string param (the repo-level system field) and an
-`issue_field_values: [{field_id, value}]` array (org-level custom fields) —
-confirmed against the [GitHub REST API OpenAPI spec](https://raw.githubusercontent.com/github/rest-api-description/main/descriptions/api.github.com/dereferenced/api.github.com.deref.json)
+`issue_field_values: [{field_id, value}]` array (org-level custom fields, one
+entry per `org-fields` mapping) — confirmed against the [GitHub REST API OpenAPI spec](https://raw.githubusercontent.com/github/rest-api-description/main/descriptions/api.github.com/dereferenced/api.github.com.deref.json)
 (`patch /repos/{owner}/{repo}/issues/{issue_number}`, properties `type` and
-`issue_field_values`). Both only require push access to the repo.
+`issue_field_values`). Both only require push access to the repo, regardless
+of how many fields are mapped.
 
 ### Doesn't clobber manual triage
 
@@ -125,10 +131,10 @@ GitHub Actions has no way to trigger only for issues opened from a specific
 template, so this action always runs on every `issues: opened` event and has
 to cope with issues it wasn't meant for. Two layers handle that:
 
-- If neither `type-form-field` nor `scope-form-field` shows up in the parsed
-  form answers, the action logs and returns without calling the API at all.
-  This is the common case for a free-form issue or one from an unrelated
-  template.
+- If neither `type-form-field` nor any `org-fields` key shows up in the
+  parsed form answers, the action logs and returns without calling the API
+  at all. This is the common case for a free-form issue or one from an
+  unrelated template.
 - If the issue does have those keys but with a value that doesn't match any
   enabled repo type or field option (a coincidentally-similar template, or a
   typo'd manual value the API rejects with `422`), the `PATCH` call is wrapped
@@ -147,8 +153,22 @@ second credential (a PAT or GitHub App) just to resolve a name this action
 only ever needs to resolve once.
 
 Since this action is OvertureMaps-only and org-level field IDs are stable
-once created, `scope-org-field-id` defaults directly to the numeric ID of the
-org's `Scope` field. That keeps the whole action running on nothing but
-`github-token`. If OvertureMaps ever needs to target a different org-level
-field, look its ID up once with `gh api orgs/OvertureMaps/issue-fields` and
-pass it via `scope-org-field-id` — no extra token required either way.
+once created, `org-fields` defaults directly to the numeric IDs of the org's
+`Scope` and `Skillset` fields. That keeps the whole action running on
+nothing but `github-token`. If OvertureMaps ever needs to target a different
+org-level field, look its ID up once with `gh api orgs/OvertureMaps/issue-fields`
+and add a `form-field=org-field-id` line to `org-fields` — no extra token
+required either way.
+
+### Why `org-fields` is a map, not one input per field
+
+`scope-org-field-id` started as a single dedicated input because there was
+only one org-level field to sync. Adding `skillset` the same way would mean a
+new `skillset-form-field`/`skillset-org-field-id` pair for every future field,
+with the action's inputs and script both growing linearly. `org-fields` takes
+a newline-separated list of `form-field=org-field-id` pairs instead, so
+mapping another org-level field is a config change, not a code change.
+Newline-delimited `key=value` pairs (rather than a JSON or YAML blob) match
+how other composite actions already take small maps as string inputs (e.g.
+`docker/build-push-action`'s `build-args`), and stay easy to read and diff in
+a workflow file without escaping quotes.
