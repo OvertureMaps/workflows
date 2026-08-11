@@ -40,7 +40,7 @@ runs:
   steps:
     - name: Fetch issue
       id: fetch-issue
-      uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
+      uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
       env:
         ISSUE_NUMBER_INPUT: ${{ inputs.issue-number }}
       with:
@@ -63,7 +63,7 @@ runs:
 
     - name: Determine desired updates
       id: updates
-      uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
+      uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
       env:
         ANSWERS: ${{ steps.issue-parser.outputs.jsonString }}
         TYPE_NAME: ${{ steps.fetch-issue.outputs.type-name }}
@@ -116,7 +116,7 @@ runs:
 
     - name: Apply issue field updates
       if: steps.updates.outputs.type || steps.updates.outputs.org-field-updates
-      uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
+      uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
       env:
         TYPE: ${{ steps.updates.outputs.type }}
         ORG_FIELD_UPDATES: ${{ steps.updates.outputs.org-field-updates }}
