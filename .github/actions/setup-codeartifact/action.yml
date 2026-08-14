@@ -87,7 +87,7 @@ outputs:
   pypi-publish-url:
     description: >
       Pypi publish endpoint URL without embedded credentials
-      (https://.../pypi/<repository>). Pass it to `uv publish --publish-url`
+      (https://.../pypi/<repository>/). Pass it to `uv publish --publish-url`
       with the token supplied separately (username "aws", password from the
       `token` output or the env var named by `token-env-var`). Empty unless
       format is "pypi".
@@ -171,7 +171,7 @@ runs:
         AWS_REGION: ${{ inputs.aws-region }}
         CODEARTIFACT_TOKEN: ${{ steps.token.outputs.token }}
       run: |
-        BASE_URL="https://${CODEARTIFACT_DOMAIN}-${CODEARTIFACT_DOMAIN_OWNER}.d.codeartifact.${AWS_REGION}.amazonaws.com/pypi/${CODEARTIFACT_REPOSITORY}"
+        BASE_URL="https://${CODEARTIFACT_DOMAIN}-${CODEARTIFACT_DOMAIN_OWNER}.d.codeartifact.${AWS_REGION}.amazonaws.com/pypi/${CODEARTIFACT_REPOSITORY}/"
 
         INDEX_URL="https://aws:${CODEARTIFACT_TOKEN}@${CODEARTIFACT_DOMAIN}-${CODEARTIFACT_DOMAIN_OWNER}.d.codeartifact.${AWS_REGION}.amazonaws.com/pypi/${CODEARTIFACT_REPOSITORY}/simple/"
         echo "::add-mask::$INDEX_URL"

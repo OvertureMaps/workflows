@@ -98,7 +98,7 @@ re-specifying it:
   (`https://aws:TOKEN@.../pypi/<repo>/simple/`), masked in logs, for
   `pip`/`uv --index-url`. Empty unless `format: pypi`.
 - `pypi-publish-url` — pypi publish endpoint without credentials
-  (`https://.../pypi/<repo>`), for `uv publish --publish-url` with the token
+  (`https://.../pypi/<repo>/`), for `uv publish --publish-url` with the token
   passed separately. Empty unless `format: pypi`.
 - `token` — the masked CodeArtifact authorization token. Only needed if you
   set `token-env-var` to an empty string and want the token scoped to a single
