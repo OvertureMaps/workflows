@@ -45,6 +45,16 @@ inputs:
       Examples: "--no-sign-request", "--credentials-file /path/to/creds".
     required: false
     default: ""
+  subcommand-flags:
+    description: >
+      Flags to pass to the s5cmd subcommand itself, placed after the
+      subcommand and before source/destination, as a single string. These are
+      distinct from 'flags' (global flags before the subcommand): s5cmd
+      subcommands take their own flags, e.g. "sync --delete". Not used with
+      the run command, since its batch-file lines carry their own per-command
+      flags. Example: "--delete" for sync.
+    required: false
+    default: ""
   version:
     description: >
       s5cmd version to install. Pinned to 2.3.0 by default. Override only
@@ -68,6 +78,7 @@ runs:
         SRC="${INPUTS_SOURCE}"
         DST="${INPUTS_DESTINATION}"
         BATCH="${INPUTS_BATCH_FILE}"
+        SUBCMD_FLAGS="${INPUTS_SUBCOMMAND_FLAGS}"
 
         case "$CMD" in
           cp|mv|rm|ls|sync|run) ;;
@@ -89,11 +100,16 @@ runs:
           echo "::error::'batch-file' is only valid with the 'run' command. Did you mean to use 'source'?"
           exit 1
         fi
+        if [[ "$CMD" == "run" && -n "$SUBCMD_FLAGS" ]]; then
+          echo "::error::'subcommand-flags' is not valid with the 'run' command. Put per-command flags inline in the batch-file instead."
+          exit 1
+        fi
       env:
         INPUTS_COMMAND: ${{ inputs.command }}
         INPUTS_SOURCE: ${{ inputs.source }}
         INPUTS_DESTINATION: ${{ inputs.destination }}
         INPUTS_BATCH_FILE: ${{ inputs.batch-file }}
+        INPUTS_SUBCOMMAND_FLAGS: ${{ inputs.subcommand-flags }}
 
     - name: s5cmd ${{ inputs.command }}
       shell: bash
@@ -103,8 +119,9 @@ runs:
         DST="${INPUTS_DESTINATION}"
         BATCH="${INPUTS_BATCH_FILE}"
         FLAGS="${INPUTS_FLAGS}"
+        SUBCMD_FLAGS="${INPUTS_SUBCOMMAND_FLAGS}"
 
-        # Build argument array: global flags first, then subcommand, then positional args
+        # Build argument array: global flags, then subcommand, then subcommand flags, then positional args
         ARGS=()
 
         # Word-split flags safely (simple space split; quote within flags if needed)
@@ -118,6 +135,10 @@ runs:
         if [[ "$CMD" == "run" ]]; then
           ARGS+=("$BATCH")
         else
+          if [[ -n "$SUBCMD_FLAGS" ]]; then
+            read -ra SUBCMD_FLAG_ARRAY <<< "$SUBCMD_FLAGS"
+            ARGS+=("${SUBCMD_FLAG_ARRAY[@]}")
+          fi
           [[ -n "$SRC" ]] && ARGS+=("$SRC")
           [[ -n "$DST" ]] && ARGS+=("$DST")
         fi
@@ -130,3 +151,4 @@ runs:
         INPUTS_DESTINATION: ${{ inputs.destination }}
         INPUTS_BATCH_FILE: ${{ inputs.batch-file }}
         INPUTS_FLAGS: ${{ inputs.flags }}
+        INPUTS_SUBCOMMAND_FLAGS: ${{ inputs.subcommand-flags }}
