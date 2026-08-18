@@ -1,6 +1,6 @@
 # Authenticate with AWS CodeArtifact <!-- omit in toc -->
 
-A composite GitHub Action that assumes an IAM role via OIDC, acquires an AWS CodeArtifact authorization token, and writes a Maven `settings.xml` so subsequent `mvn` commands can resolve and deploy artifacts against CodeArtifact.
+A composite GitHub Action that assumes an IAM role via OIDC, acquires an AWS CodeArtifact authorization token, and configures the requested package format: a Maven `settings.xml` so subsequent `mvn` commands can resolve and deploy artifacts (`format: maven`, the default), or pypi index/publish URLs for pip and uv (`format: pypi`).
 
 - [How-to guides](#how-to-guides)
 - [Reference](#reference)
@@ -35,23 +35,55 @@ jobs:
 > Pin to a commit SHA rather than `@main` for reproducible builds, e.g.
 > `uses: OvertureMaps/workflows/.github/actions/setup-codeartifact@<sha>`.
 
+### Authenticate for pypi
+
+Set `format: pypi` to skip the Maven `settings.xml` and get pypi URLs instead.
+The `pypi-index-url` output embeds the token as credentials (masked in logs)
+for `pip`/`uv --index-url`; the `pypi-publish-url` output carries no
+credentials, so pass the token separately when publishing:
+
+```yaml
+- name: Authenticate with CodeArtifact
+  id: ca
+  uses: OvertureMaps/workflows/.github/actions/setup-codeartifact@main
+  with:
+    aws-role-arn: arn:aws:iam::123456789012:role/codeartifact-publisher
+    codeartifact-domain: overture-pypi
+    codeartifact-domain-owner: "123456789012"
+    codeartifact-repository: overture
+    format: pypi
+
+- name: Publish
+  env:
+    UV_PUBLISH_USERNAME: aws
+    UV_PUBLISH_PASSWORD: ${{ steps.ca.outputs.token }}
+  run: uv publish --publish-url "${{ steps.ca.outputs.pypi-publish-url }}"
+```
+
+To dual-publish the same package to two CodeArtifact accounts (e.g. a legacy
+domain and the MCD domain during a migration), call the action twice in the
+same job with distinct step ids and role/domain/owner inputs, and run the
+publish step once per id.
+
 ## Reference
 
 ### Inputs
 
 - `aws-role-arn` (**required**): IAM role ARN to assume via OIDC.
 - `aws-region` (optional): AWS region where CodeArtifact is hosted. Default `us-west-2`.
+- `format` (optional): CodeArtifact package format, `maven` or `pypi`. Default `maven`, with behavior identical to before this input existed. `pypi` skips the Maven `settings.xml` and populates the `pypi-index-url`/`pypi-publish-url` outputs instead. Both formats share the same OIDC role assumption and token acquisition.
 - `codeartifact-domain` (**required**): CodeArtifact domain name.
 - `codeartifact-domain-owner` (**required**): AWS account ID that owns the CodeArtifact domain.
 - `codeartifact-repository` (**required**): CodeArtifact repository name.
-- `maven-repository-id` (optional): The Maven `<server>`/`<repository>` id written to `settings.xml`. Default `codeartifact`. Must match the id your `pom.xml`'s `<repositories><repository>` declares, otherwise Maven silently skips attaching CodeArtifact credentials when *resolving* dependencies (deploys are unaffected — see [The repository id must match](#the-repository-id-must-match) below). Only override this if your repo's convention differs from `codeartifact`.
+- `maven-repository-id` (optional): The Maven `<server>`/`<repository>` id written to `settings.xml`. Default `codeartifact`. Ignored when `format: pypi`. Must match the id your `pom.xml`'s `<repositories><repository>` declares, otherwise Maven silently skips attaching CodeArtifact credentials when *resolving* dependencies (deploys are unaffected — see [The repository id must match](#the-repository-id-must-match) below). Only override this if your repo's convention differs from `codeartifact`.
 - `token-env-var` (optional): Name of the environment variable the masked CodeArtifact token is exported to via `$GITHUB_ENV`, available to every later step in the job. Default `CODEARTIFACT_AUTH_TOKEN`. Set to an empty string to skip the export and rely on the `token` output instead (see [Using the token with tools that wrap Maven](#using-the-token-with-tools-that-wrap-maven)).
 
 ### Outputs
 
 The action's primary effect is environmental: it acquires a CodeArtifact
 authorization token (masked, exported to `$GITHUB_ENV` under `token-env-var`)
-and writes `~/.m2/settings.xml`. It also echoes the CodeArtifact metadata back
+and, for `format: maven`, writes `~/.m2/settings.xml`. It also echoes the
+CodeArtifact metadata back
 as outputs so later steps can pipe from a single source of truth instead of
 re-specifying it:
 
@@ -59,11 +91,19 @@ re-specifying it:
 - `codeartifact-domain-owner` — the owning AWS account ID.
 - `codeartifact-repository` — the repository name.
 - `aws-region` — the AWS region.
-- `repository-url` — the fully-composed Maven repository URL
-  (`https://<domain>-<owner>.d.codeartifact.<region>.amazonaws.com/maven/<repo>/`).
+- `repository-url` — the fully-composed repository URL for the requested
+  format (`https://<domain>-<owner>.d.codeartifact.<region>.amazonaws.com/<format>/<repo>/`).
+  For pypi, prefer the two outputs below.
+- `pypi-index-url` — pypi index URL with the token embedded as credentials
+  (`https://aws:TOKEN@.../pypi/<repo>/simple/`), masked in logs, for
+  `pip`/`uv --index-url`. Empty unless `format: pypi`.
+- `pypi-publish-url` — pypi publish endpoint without credentials
+  (`https://.../pypi/<repo>/`), for `uv publish --publish-url` with the token
+  passed separately. Empty unless `format: pypi`.
 - `token` — the masked CodeArtifact authorization token. Only needed if you
   set `token-env-var` to an empty string and want the token scoped to a single
-  step instead of the whole job (see below).
+  step instead of the whole job (see below), or as the publish password in
+  pypi mode.
 
 ```yaml
 - name: Authenticate with CodeArtifact
@@ -153,7 +193,8 @@ The authorization token is masked in logs and exported two ways: to
 `$GITHUB_ENV` under `token-env-var` (default `CODEARTIFACT_AUTH_TOKEN`), and
 as this action's `token` output — then embedded into the `~/.m2/settings.xml`
 written by an inline bash step (a `cat <<EOF` heredoc — no third-party
-action). The `$GITHUB_ENV` export follows the same convention used by
+action) in maven mode, or into the masked `pypi-index-url` output in pypi
+mode. The `$GITHUB_ENV` export follows the same convention used by
 `aws-actions/configure-aws-credentials` and AWS's own CodeArtifact docs: it
 makes the token ambiently available to every later step in the job, the same
 way those tokens are meant to be consumed by arbitrary AWS/Maven tooling.
