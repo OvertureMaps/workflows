@@ -42,7 +42,12 @@ inputs:
   flags:
     description: >
       Global flags to pass to s5cmd before the subcommand, as a single string.
-      Examples: "--no-sign-request", "--credentials-file /path/to/creds".
+      Examples: "--no-sign-request", "--credentials-file /path/to/creds". If
+      "--delete" is passed here with the sync command, it's automatically
+      moved after the subcommand (where s5cmd requires it) with a warning;
+      use 'subcommand-flags' instead to avoid the warning. Split on
+      whitespace, not shell quoting rules; don't pass flag values containing
+      spaces (e.g. quoted strings) here.
     required: false
     default: ""
   subcommand-flags:
@@ -52,7 +57,9 @@ inputs:
       distinct from 'flags' (global flags before the subcommand): s5cmd
       subcommands take their own flags, e.g. "sync --delete". Not used with
       the run command, since its batch-file lines carry their own per-command
-      flags. Example: "--delete" for sync.
+      flags. Example: "--delete" for sync. Split on whitespace, not shell
+      quoting rules; don't pass flag values containing spaces (e.g. quoted
+      strings) here.
     required: false
     default: ""
   version:
@@ -121,24 +128,40 @@ runs:
         FLAGS="${INPUTS_FLAGS}"
         SUBCMD_FLAGS="${INPUTS_SUBCOMMAND_FLAGS}"
 
-        # Build argument array: global flags, then subcommand, then subcommand flags, then positional args
-        ARGS=()
+        # Split on whitespace only, no shell quoting; see input descriptions
+        # above for the flag-value-with-spaces limitation this implies.
+        FLAG_ARRAY=()
+        [[ -n "$FLAGS" ]] && read -ra FLAG_ARRAY <<< "$FLAGS"
 
-        # Word-split flags safely (simple space split; quote within flags if needed)
-        if [[ -n "$FLAGS" ]]; then
-          read -ra FLAG_ARRAY <<< "$FLAGS"
-          ARGS+=("${FLAG_ARRAY[@]}")
+        SUBCMD_FLAG_ARRAY=()
+        [[ -n "$SUBCMD_FLAGS" ]] && read -ra SUBCMD_FLAG_ARRAY <<< "$SUBCMD_FLAGS"
+
+        # --delete is a sync-subcommand flag, not global, but callers written
+        # against the old (pre-subcommand-flags) 'flags' input still pass it
+        # there. Auto-correct that one known case so existing callers keep
+        # working; anything else misplaced in 'flags' still fails as before.
+        if [[ "$CMD" == "sync" ]]; then
+          CORRECTED_FLAG_ARRAY=()
+          for flag in "${FLAG_ARRAY[@]}"; do
+            if [[ "$flag" == "--delete" ]]; then
+              echo "::warning::'--delete' is a sync-subcommand flag, not a global one; moving it after 'sync' automatically. Pass it via 'subcommand-flags' instead of 'flags' to avoid this warning."
+              SUBCMD_FLAG_ARRAY+=("--delete")
+            else
+              CORRECTED_FLAG_ARRAY+=("$flag")
+            fi
+          done
+          FLAG_ARRAY=("${CORRECTED_FLAG_ARRAY[@]}")
         fi
 
+        # Build argument array: global flags, then subcommand, then subcommand flags, then positional args
+        ARGS=()
+        ARGS+=("${FLAG_ARRAY[@]}")
         ARGS+=("$CMD")
 
         if [[ "$CMD" == "run" ]]; then
           ARGS+=("$BATCH")
         else
-          if [[ -n "$SUBCMD_FLAGS" ]]; then
-            read -ra SUBCMD_FLAG_ARRAY <<< "$SUBCMD_FLAGS"
-            ARGS+=("${SUBCMD_FLAG_ARRAY[@]}")
-          fi
+          ARGS+=("${SUBCMD_FLAG_ARRAY[@]}")
           [[ -n "$SRC" ]] && ARGS+=("$SRC")
           [[ -n "$DST" ]] && ARGS+=("$DST")
         fi
