@@ -1,12 +1,22 @@
 ---
 # Reusable workflow to validate PR titles against Overture's formatting standards.
 #
-# This workflow enforces the [TYPE] bracket format for PR titles and provides
-# helpful feedback comments when validation fails.
+# This workflow accepts both the legacy [TYPE] bracket format and the
+# Conventional Commits colon syntax, and provides helpful feedback comments
+# when validation fails. It's the permissive, dual-syntax layer used while
+# repos migrate from [TYPE] to Conventional Commits at their own pace; repos
+# that only want to accept Conventional Commits titles should require
+# Overture PR Checks (v2) (validate-pr-title-cc.yml) instead.
 #
-# Required format: [TYPE] Description (Fixes #issue)
-# Optional scope:  [TYPE](scope) Description (Fixes #issue)
-# Breaking change: [BREAKING][TYPE] Description (Fixes #issue)
+# Legacy syntax:
+#   Required format: [TYPE] Description (Fixes #issue)
+#   Optional scope:  [TYPE](scope) Description (Fixes #issue)
+#   Breaking change: [BREAKING][TYPE] Description (Fixes #issue)
+#
+# Conventional Commits syntax (https://www.conventionalcommits.org/en/v1.0.0/):
+#   Required format: type: Description
+#   Optional scope:  type(scope): Description
+#   Breaking change: type(scope)!: Description
 #
 # Usage: Reference this workflow from any repo in the OvertureMaps organization.
 #
@@ -51,14 +61,34 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          # Match Overture's [TYPE] bracket format:
+          # Matches both Overture's legacy [TYPE] bracket format and the
+          # Conventional Commits colon syntax:
           #   [BUG] Fix something
           #   [REFACTOR](schema) Consolidate logic
           #   [BREAKING][FEATURE] Change API response format
-          headerPattern: '^\[(?:BREAKING\]\[)?(\w+)\](?:\(([^)]+)\))?\s(.+)$'
+          #   fix: Correct null pointer exception
+          #   refactor(schema): Consolidate logic
+          #   refactor(schema)!: Drop support for legacy category format
+          #
+          # NOTE: amannn/action-semantic-pull-request maps headerPattern's
+          # capture groups to headerPatternCorrespondence by fixed index
+          # (via conventional-changelog), and Node's regex engine has no
+          # "branch reset" grouping. That means this single pattern can't
+          # cleanly say "try the bracket format, else try the colon format"
+          # with independently-numbered groups; it has to reuse the same
+          # three groups (type, scope, subject) across both syntaxes. The
+          # tradeoff: this pattern is intentionally lenient at the edges and
+          # will also accept a few malformed hybrids that are valid in
+          # neither spec alone, e.g. `[BUG]: subject` or `fix] subject`. A
+          # strictly-separate validator for each syntax would need two
+          # independent jobs/steps, which duplicates this reusable
+          # workflow's single-job structure.
+          headerPattern: '^\[?(?:BREAKING\]\[)?(\w+)\]?(?:\(([^)]+)\))?!?:?\s(.+)$'
           headerPatternCorrespondence: type, scope, subject
           requireScope: false
-          # Allowed types, matching the Issue/PR types defined in github-usage.md
+          # Allowed types: Overture's legacy [TYPE] words (github-usage.md)
+          # plus their Conventional Commits equivalents. INVESTIGATION has no
+          # Conventional Commits equivalent and isn't accepted going forward.
           types: |
             BUG
             FEATURE
@@ -70,6 +100,13 @@ jobs:
             PERFORMANCE
             SECURITY
             INVESTIGATION
+            fix
+            feat
+            docs
+            refactor
+            test
+            chore
+            perf
 
           # Allow [WIP] prefix for draft work on repos without draft PR support.
           wip: true
@@ -94,8 +131,10 @@ jobs:
             **Examples:**
             - `[BUG] Fix null pointer exception in geometry validator`
             - `[REFACTOR](schema) Consolidate validation logic`
+            - `fix: Correct null pointer exception in geometry validator`
+            - `refactor(schema): Consolidate validation logic`
 
-            See the [Overture Maps Foundation GitHub usage guidelines](https://github.com/OvertureMaps/operating-procedures/blob/main/development/github-usage.md) for full documentation.
+            See the [Overture Maps Foundation GitHub usage guidelines](https://github.com/OvertureMaps/operating-procedures/blob/main/development/github-usage.md) or the [Conventional Commits specification](https://www.conventionalcommits.org/en/v1.0.0/) for full documentation.
 
       - name: Delete comment on success
         if: ${{ success() }}

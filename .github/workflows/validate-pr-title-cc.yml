@@ -1,0 +1,110 @@
+---
+# Reusable workflow to validate PR titles against strict Conventional Commits syntax.
+#
+# This workflow enforces the standard Conventional Commits header format ONLY:
+#
+#   Required format: type: Description
+#   Optional scope:  type(scope): Description
+#   Breaking change: type(scope)!: Description
+#
+# See: https://www.conventionalcommits.org/en/v1.0.0/
+#
+# Legacy [TYPE] bracket titles are rejected here. Repos migrating from the
+# legacy format should stay on validate-pr-title.yml (via OMF PR Checks) until
+# they're ready to require Overture PR Checks (v2).
+#
+# Usage: Reference this workflow from any repo in the OvertureMaps organization.
+#
+# Example (.github/workflows/pr-validation.yml):
+#   name: PR Title Validation
+#   on:
+#     pull_request:
+#       types: [opened, reopened, edited, synchronize]
+#   jobs:
+#     validate-title:
+#       uses: OvertureMaps/workflows/.github/workflows/validate-pr-title-cc.yml@main
+#
+name: Validate PR Title (Conventional Commits)
+
+on: # zizmor: ignore[concurrency-limits]
+  workflow_call:
+  pull_request_target: # zizmor: ignore[dangerous-triggers]
+    types:
+      - opened
+      - reopened
+      - edited
+      - synchronize
+
+# pull_request_target runs with write permissions so this workflow works for fork PRs.
+# SECURITY: This workflow must never check out or execute code from the PR branch.
+# If you need to add a step that does so, use the workflow_run pattern instead.
+permissions:
+  contents: none # no repository content access needed
+
+jobs:
+  validate:
+    name: Validate PR Title
+    runs-on: ubuntu-latest
+    permissions:
+      contents: none # no repository content access needed
+      pull-requests: write # to post PR title validation comments
+      issues: write # to post PR-related issue comments via sticky comment action
+      statuses: write # to update commit status checks
+    steps:
+      - uses: amannn/action-semantic-pull-request@48f256284bd46cdaab1048c3721360e808335d50 # v6.1.1
+        id: lint_pr_title
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          # No headerPattern override: the action's default already parses the
+          # standard Conventional Commits header (type(scope)!: subject).
+          requireScope: false
+          # Overture's Conventional Commits type vocabulary. Deliberately a
+          # subset of the commitizen defaults (no build/ci/revert/style) to
+          # match the concepts the legacy [TYPE] format covered.
+          types: |
+            fix
+            feat
+            docs
+            refactor
+            test
+            chore
+            perf
+
+          # Allow [WIP] prefix for draft work on repos without draft PR support.
+          wip: true
+
+          # Allow opt-out via labels, since some repos may have automated PRs that don't follow the new format.
+          ignoreLabels: |
+            bot
+            ignore-semantic-pull-request
+
+      - name: Post validation failure comment
+        if: ${{ failure() && steps.lint_pr_title.outputs.error_message }}
+        uses: marocchino/sticky-pull-request-comment@5770ad5eb8f42dd2c4f34da00c94c5381e49af88 # v3.0.5
+        with:
+          header: pr-title-validation-error
+          message: |
+            ## ❌ PR Title Validation Failed
+
+            **Error:** ${{ steps.lint_pr_title.outputs.error_message }}
+
+            ---
+
+            This repo requires [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/) PR titles: `type(scope)!: description`, where `(scope)` is optional and `!` marks a breaking change.
+
+            **Allowed types:** `fix`, `feat`, `docs`, `refactor`, `test`, `chore`, `perf`
+
+            **Examples:**
+            - `fix: Correct null pointer exception in geometry validator`
+            - `feat(schema): Add support for new place category`
+            - `refactor(schema)!: Drop support for legacy category format`
+
+            See the [Conventional Commits specification](https://www.conventionalcommits.org/en/v1.0.0/#specification) for the full grammar, or [why Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/#why-use-conventional-commits) for the rationale.
+
+      - name: Delete comment on success
+        if: ${{ success() }}
+        uses: marocchino/sticky-pull-request-comment@5770ad5eb8f42dd2c4f34da00c94c5381e49af88 # v3.0.5
+        with:
+          header: pr-title-validation-error
+          delete: true
