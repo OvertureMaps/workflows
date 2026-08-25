@@ -83,7 +83,13 @@ jobs:
           # strictly-separate validator for each syntax would need two
           # independent jobs/steps, which duplicates this reusable
           # workflow's single-job structure.
-          headerPattern: '^\[?(?:BREAKING\]\[)?(\w+)\]?(?:\(([^)]+)\))?!?:?\s(.+)$'
+          #
+          # The leading `(?!INVESTIGATION\b)` keeps INVESTIGATION
+          # bracket-only: without it, the colon-syntax branch would happily
+          # capture an unbracketed `INVESTIGATION: subject` as a valid type,
+          # even though INVESTIGATION has no Conventional Commits equivalent
+          # and is only allowed via the legacy `[INVESTIGATION]` form.
+          headerPattern: '^(?!INVESTIGATION\b)\[?(?:BREAKING\]\[)?(\w+)\]?(?:\(([^)]+)\))?!?:?\s(.+)$'
           headerPatternCorrespondence: type, scope, subject
           requireScope: false
           # Allowed types: Overture's legacy [TYPE] words (github-usage.md)

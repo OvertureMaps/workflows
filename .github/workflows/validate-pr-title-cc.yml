@@ -13,6 +13,12 @@
 # legacy format should stay on validate-pr-title.yml (via OMF PR Checks) until
 # they're ready to require Overture PR Checks (v2).
 #
+# workflow_call only, deliberately: this repo's own PRs still use the legacy
+# [TYPE] format, so a direct pull_request_target trigger here would add a
+# failing, non-opt-in check against this repo (and any other caller repo
+# that hasn't migrated yet). The bundling workflow that owns the event
+# trigger is overture_pr_checks_v2.yml.
+#
 # Usage: Reference this workflow from any repo in the OvertureMaps organization.
 #
 # Example (.github/workflows/pr-validation.yml):
@@ -26,16 +32,12 @@
 #
 name: Validate PR Title (Conventional Commits)
 
-on: # zizmor: ignore[concurrency-limits]
+on:
   workflow_call:
-  pull_request_target: # zizmor: ignore[dangerous-triggers]
-    types:
-      - opened
-      - reopened
-      - edited
-      - synchronize
 
-# pull_request_target runs with write permissions so this workflow works for fork PRs.
+# This workflow only runs via workflow_call from a caller's pull_request_target
+# job (e.g. overture_pr_checks_v2.yml), which is what grants write permissions
+# for fork PRs.
 # SECURITY: This workflow must never check out or execute code from the PR branch.
 # If you need to add a step that does so, use the workflow_run pattern instead.
 permissions:
