@@ -1,0 +1,50 @@
+---
+# 🦫 Overture PR checks, v2.
+#
+# Bundles the following checks:
+#   - PR Title:      Validates PR titles against strict Conventional Commits syntax
+#   - Check Issue:   Enforces that PRs have a linked GitHub issue
+#
+# Successor to OMF PR Checks (omf_pr_checks.yml). Repos opt in to this workflow
+# when their maintainers are ready to require Conventional Commits PR titles
+# instead of the legacy [TYPE] bracket format; both workflows are supported
+# side by side, there's no forced org-wide cutover.
+#
+# Designed to run as a GitHub Ruleset required workflow.
+#
+name: Overture PR Checks (v2)
+
+on: # zizmor: ignore[concurrency-limits]
+  pull_request_target: # zizmor: ignore[dangerous-triggers]
+    types: [opened, reopened, edited, synchronize]
+
+# pull_request_target runs with write permissions so this workflow works for fork PRs.
+# SECURITY: This workflow must never check out or execute code from the PR branch.
+# If you need to add a step that does so, use the workflow_run pattern instead.
+permissions:
+  contents: none # no repository content access needed
+
+jobs:
+
+  validate-pr-title:
+    name: title
+    permissions:
+      contents: none # no repository content access needed
+      pull-requests: write # to post PR title validation comments
+      issues: write # to post PR-related issue comments
+      statuses: write # to update commit status checks
+    uses: OvertureMaps/workflows/.github/workflows/validate-pr-title-cc.yml@main # zizmor: ignore[unpinned-uses]
+
+  check-linked-issue:
+    name: issue
+    runs-on: ubuntu-latest
+    permissions:
+      contents: none # no repository content access needed
+      pull-requests: write # to query PR metadata, closing issue references, and post/clear failure comments
+      issues: write # to post PR-related issue comments via sticky comment action
+      statuses: write # to update commit status checks
+    steps:
+      - name: Check for linked issue
+        uses: OvertureMaps/workflows/.github/actions/check-linked-issue@main # zizmor: ignore[unpinned-uses]
+        with:
+          privateKey: ${{ secrets.CHECK_LINKED_ISSUE_APP_PEM }} # zizmor: ignore[secrets-outside-env]
