@@ -112,7 +112,7 @@ runs:
               `This PR does not reference enough linked issues (found ${issues.length}, required ${minimumLinkedIssues}).\n\n` +
               "Please link an issue from this repository, using `Fixes #123`, `Closes #123`, or the " +
               "[GitHub UI](https://docs.github.com/en/issues/tracking-your-work-with-issues/using-issues/linking-a-pull-request-to-an-issue).\n\n" +
-              "After adding a linked issue, you may need to manually re-run this check from the Checks tab to update the status.";
+              "After adding a linked issue, use the re-run link below to update the status (linking via the Development sidebar doesn't fire a new check automatically).";
             core.setOutput('error_message', message);
             core.setFailed(`❌ ${message}`);
           } else {
@@ -131,6 +131,8 @@ runs:
           ## ❌ Linked Issue Check Failed
 
           ${{ steps.check_issue.outputs.error_message }}
+
+          [![Re-run this check](https://img.shields.io/badge/-Re--run%20this%20check-blue?style=for-the-badge)](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
 
     - name: Delete comment on success
       if: ${{ success() }}
