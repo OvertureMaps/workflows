@@ -108,7 +108,7 @@ jobs:
 
             See the [Conventional Commits specification](https://www.conventionalcommits.org/en/v1.0.0/#specification) for the full grammar, or [why Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/#why-use-conventional-commits) for the rationale.
 
-            Fixed the title? This check won't pick up an edit automatically ([#66](https://github.com/OvertureMaps/workflows/issues/66)):
+            Fixed the title? This check won't pick up an edit automatically:
 
             [![Re-run this check](https://img.shields.io/badge/-Re--run%20this%20check-blue?style=for-the-badge)](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
 
