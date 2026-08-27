@@ -142,6 +142,10 @@ jobs:
 
             See the [Overture Maps Foundation GitHub usage guidelines](https://github.com/OvertureMaps/operating-procedures/blob/main/development/github-usage.md) or the [Conventional Commits specification](https://www.conventionalcommits.org/en/v1.0.0/) for full documentation.
 
+            Fixed the title? This check won't pick up an edit automatically ([#66](https://github.com/OvertureMaps/workflows/issues/66)):
+
+            [![Re-run this check](https://img.shields.io/badge/-Re--run%20this%20check-blue?style=for-the-badge)](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
+
       - name: Delete comment on success
         if: ${{ success() }}
         uses: marocchino/sticky-pull-request-comment@5770ad5eb8f42dd2c4f34da00c94c5381e49af88 # v3.0.5
