@@ -168,7 +168,7 @@ AWS permissions are governed entirely by the IAM role or credentials configured 
 
 ### Supported runner operating systems
 
-Support mirrors [`peak/action-setup-s5cmd`](https://github.com/peak/action-setup-s5cmd): Linux and macOS runners are supported. Windows runners are not.
+Linux and macOS runners are supported. Windows runners are not.
 
 | OS | Supported |
 |---|:---:|
@@ -176,15 +176,13 @@ Support mirrors [`peak/action-setup-s5cmd`](https://github.com/peak/action-setup
 | `macos-*` | ✅ |
 | `windows-*` | ❌ |
 
-### Caching
-
-Installation caching is handled by [`peak/action-setup-s5cmd`](https://github.com/peak/action-setup-s5cmd). No additional cache configuration is needed.
-
 ## Explanation
 
 ### How installation works
 
-Installation is delegated to [`peak/action-setup-s5cmd`](https://github.com/peak/action-setup-s5cmd), the official setup action maintained by the s5cmd authors. It queries the GitHub Releases API to find the correct asset for the runner OS and architecture, downloads it, and adds the binary to `PATH`. Pinning to a specific commit SHA of `action-setup-s5cmd` ensures the install behaviour is reproducible alongside the s5cmd version pin.
+Installation is self-contained: the action builds the release asset's download URL directly from the pinned `version` input and the runner's OS/architecture, then downloads it straight from GitHub's release CDN (`github.com/peak/s5cmd/releases/download/...`).
+
+Earlier versions delegated this to [`peak/action-setup-s5cmd`](https://github.com/peak/action-setup-s5cmd), which resolves the asset URL via the unauthenticated `api.github.com` releases-list endpoint. That endpoint shares a 60-requests/hour quota across every unauthenticated caller on a GitHub-hosted runner's IP, so it intermittently returned a rate-limit error under shared-runner load, failing the install step ([#85](https://github.com/OvertureMaps/workflows/issues/85)). Because s5cmd's release asset filenames follow a stable, documented convention, the download URL can be constructed directly without any API call, removing the failure mode entirely.
 
 ### Why s5cmd instead of the aws s3 CLI
 

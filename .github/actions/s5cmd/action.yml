@@ -74,9 +74,54 @@ runs:
   using: composite
   steps:
     - name: Install s5cmd v${{ inputs.version }}
-      uses: peak/action-setup-s5cmd@bde462e7399c68b4a9b05549d90b0e7d5c95e60f # zizmor: ignore[stale-action-refs] — upstream has no releases or tags; main
-      with:
-        version: v${{ inputs.version }}
+      shell: bash
+      run: | # zizmor: ignore[github-env] -- binary_dir is derived from RUNNER_TEMP and a version pinned in inputs, not attacker-controlled event data
+        set -euo pipefail
+
+        version="${INPUTS_VERSION}"
+        os="${RUNNER_OS}"
+        arch="${RUNNER_ARCH}"
+
+        case "${os}" in
+          Linux) os="Linux" ;;
+          macOS) os="macOS" ;;
+          *)
+            echo "::error::Unsupported runner OS for s5cmd: '${os}'. Only Linux and macOS are supported."
+            exit 1
+            ;;
+        esac
+
+        case "${arch}" in
+          X64) arch="64bit" ;;
+          ARM64) arch="arm64" ;;
+          *)
+            echo "::error::Unsupported runner architecture for s5cmd: '${arch}'."
+            exit 1
+            ;;
+        esac
+
+        # Download directly from the release CDN (github.com/.../releases/download/...)
+        # rather than resolving the asset via the unauthenticated api.github.com
+        # releases-list endpoint. That endpoint shares a 60-req/hour quota across
+        # every unauthenticated caller on a runner's IP, so it intermittently
+        # rate-limits under shared-runner load. Release asset filenames are a
+        # stable, documented convention, so the URL can be built without an API
+        # call at all.
+        asset_name="s5cmd_${version}_${os}-${arch}.tar.gz"
+        asset_url="https://github.com/peak/s5cmd/releases/download/v${version}/${asset_name}"
+
+        download_dir="${RUNNER_TEMP}/s5cmd-asset"
+        binary_dir="${RUNNER_TEMP}/s5cmd-bin"
+        mkdir -p "${download_dir}" "${binary_dir}"
+
+        archive_path="${download_dir}/s5cmd.tar.gz"
+        echo "Downloading ${asset_url}"
+        curl -sSfL --retry 3 --retry-connrefused -o "${archive_path}" "${asset_url}"
+
+        tar -xf "${archive_path}" -C "${binary_dir}" s5cmd
+        echo "${binary_dir}" >> "$GITHUB_PATH"
+      env:
+        INPUTS_VERSION: ${{ inputs.version }}
 
     - name: Validate inputs
       shell: bash
