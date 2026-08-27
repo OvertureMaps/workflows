@@ -85,7 +85,11 @@ jobs:
         if: ${{ failure() && steps.lint_pr_title.outputs.error_message }}
         uses: marocchino/sticky-pull-request-comment@5770ad5eb8f42dd2c4f34da00c94c5381e49af88 # v3.0.5
         with:
-          header: pr-title-validation-error
+          # Distinct from validate-pr-title.yml's "pr-title-validation-error" header:
+          # this repo requires both workflows on its own PRs, and a shared header meant
+          # the legacy workflow's "delete on success" step would delete this comment
+          # out from under a genuinely failing CC check.
+          header: pr-title-cc-validation-error
           message: |
             ## ❌ PR Title Validation Failed
 
@@ -104,9 +108,13 @@ jobs:
 
             See the [Conventional Commits specification](https://www.conventionalcommits.org/en/v1.0.0/#specification) for the full grammar, or [why Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/#why-use-conventional-commits) for the rationale.
 
+            Fixed the title? This check won't pick up an edit automatically ([#66](https://github.com/OvertureMaps/workflows/issues/66)):
+
+            [![Re-run this check](https://img.shields.io/badge/-Re--run%20this%20check-blue?style=for-the-badge)](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
+
       - name: Delete comment on success
         if: ${{ success() }}
         uses: marocchino/sticky-pull-request-comment@5770ad5eb8f42dd2c4f34da00c94c5381e49af88 # v3.0.5
         with:
-          header: pr-title-validation-error
+          header: pr-title-cc-validation-error
           delete: true
