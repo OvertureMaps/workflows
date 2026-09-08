@@ -1,6 +1,6 @@
 # uv Publish to CodeArtifact <!-- omit in toc -->
 
-A composite GitHub Action that publishes an already-built Python wheel/sdist to an AWS CodeArtifact pypi repository via `uv publish`. It installs `uv`, authenticates with CodeArtifact, and publishes — re-running it for a version that's already published is a no-op instead of a failure.
+A composite GitHub Action that publishes an already-built Python wheel/sdist to an AWS CodeArtifact pypi repository via `uv publish`. It authenticates with CodeArtifact and publishes — re-running it for a version that's already published is a no-op instead of a failure. Requires `uv` to already be on `PATH` (the caller has typically already installed it to build the package).
 
 - [How-to guides](#how-to-guides)
 - [Reference](#reference)
@@ -112,6 +112,9 @@ the other write actions CodeArtifact requires) for the target repository.
 
 ### Requirements
 
+- `uv` must already be on `PATH` (this action doesn't install it). Add
+  `astral-sh/setup-uv` in an earlier step if the job doesn't already have
+  one — most callers do, since `uv build` needs it too.
 - The distribution files matched by `files` must already exist under
   `working-directory` (build them with `uv build` or equivalent in an earlier
   step).
@@ -120,11 +123,12 @@ the other write actions CodeArtifact requires) for the target repository.
 
 ### What it does
 
-The action runs three steps: installs `uv` (`astral-sh/setup-uv`),
-authenticates with CodeArtifact (delegated to
+The action runs two steps: authenticates with CodeArtifact (delegated to
 [`setup-codeartifact`](../setup-codeartifact/README.md) with `format: pypi`),
 then runs `uv publish` with the composed publish/index URLs and the
-CodeArtifact token as credentials.
+CodeArtifact token as credentials. It assumes `uv` is already on `PATH` (see
+[Requirements](#requirements)) rather than installing it, since the caller
+almost always ran `astral-sh/setup-uv` already to build the package.
 
 ### Why this action doesn't build the package
 

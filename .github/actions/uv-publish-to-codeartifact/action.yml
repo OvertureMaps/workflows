@@ -1,11 +1,12 @@
 name: uv Publish to CodeArtifact
 description: >
   Publishes an already-built Python wheel/sdist to an AWS CodeArtifact pypi
-  repository via `uv publish`. Installs uv and authenticates with
-  CodeArtifact internally — suitable for drop-in use right after a build
-  step. Does not build the package itself, since Python versioning/build
-  conventions vary too much across repos; build into `dist/` (or the
-  directory named by `files`) before calling this action.
+  repository via `uv publish`. Authenticates with CodeArtifact internally —
+  suitable for drop-in use right after a build step. Does not build the
+  package itself, since Python versioning/build conventions vary too much
+  across repos; build into `dist/` (or the directory named by `files`)
+  before calling this action. Requires `uv` to already be on `PATH`
+  (typically installed via `astral-sh/setup-uv` to build the package).
 
 inputs:
   aws-role-arn:
@@ -51,9 +52,6 @@ inputs:
 runs:
   using: "composite"
   steps:
-    - name: Set up uv
-      uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
-
     - name: Authenticate with CodeArtifact
       id: codeartifact
       uses: OvertureMaps/workflows/.github/actions/setup-codeartifact@main # zizmor: ignore[unpinned-uses] -- trusted same-repo self-reference; pinned to the branch-protected default branch by design
