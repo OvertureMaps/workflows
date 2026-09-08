@@ -11,7 +11,7 @@
 # No PR code is executed. Write access is limited to uploading SARIF results
 # to GitHub Advanced Security.
 #
-name: OMF Security Checks
+name: Overture Security Checks
 
 on: # zizmor: ignore[concurrency-limits]
   pull_request:
