@@ -89,6 +89,7 @@ publishing to the other.
 - `codeartifact-repository` (**required**): CodeArtifact repository name.
 - `files` (optional): Glob of already-built distribution files to publish. Default `dist/*`. Resolved relative to `working-directory`.
 - `working-directory` (optional): Directory containing the built distribution files. Defaults to the repository root (`.`). Set this to publish a project that lives in a subdirectory.
+- `check-url` (optional): Whether to pass `--check-url` to `uv publish` so re-running this action for an already-published version is a no-op instead of a failure (see [Idempotent re-runs via `--check-url`](#idempotent-re-runs-via---check-url)). Default `true`. Set to `false` only if the target index doesn't support the check, or duplicate versions should hard-fail instead of no-op.
 
 ### Outputs
 
@@ -149,6 +150,10 @@ uploads. That makes re-running this action for a version that's already
 published a no-op instead of a failure — no custom skip-logic needed. See the
 [uv publish guide](https://docs.astral.sh/uv/guides/package/#publishing-your-package)
 for details.
+
+This is on by default (`check-url: true`). Set it to `false` only if the
+target index can't be queried the way `--check-url` expects, or a duplicate
+version should hard-fail rather than silently no-op.
 
 ### Self-referential authentication
 

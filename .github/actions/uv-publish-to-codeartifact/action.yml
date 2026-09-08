@@ -37,6 +37,16 @@ inputs:
       subdirectory.
     required: false
     default: "."
+  check-url:
+    description: >
+      Whether to pass `--check-url` (the CodeArtifact pypi index URL) to
+      `uv publish`, so re-running this action for an already-published
+      version skips re-uploading identical files instead of failing.
+      Defaults to true. Set to false only if this index doesn't support the
+      check (e.g. it can't be queried the way `--check-url` expects) or if
+      duplicate versions should hard-fail instead of no-op.
+    required: false
+    default: "true"
 
 runs:
   using: "composite"
@@ -64,8 +74,14 @@ runs:
         UV_PUBLISH_PASSWORD: ${{ steps.codeartifact.outputs.token }}
         PUBLISH_URL: ${{ steps.codeartifact.outputs.pypi-publish-url }}
         CHECK_URL: ${{ steps.codeartifact.outputs.pypi-index-url }}
+        CHECK_URL_ENABLED: ${{ inputs.check-url }}
       run: |
         # --check-url skips re-uploading any file that's already published
         # byte-identical at that index, making re-runs of this step a no-op
-        # for versions already in CodeArtifact instead of failing.
-        uv publish $FILES --publish-url "$PUBLISH_URL" --check-url "$CHECK_URL"
+        # for versions already in CodeArtifact instead of failing. Opt out
+        # via the check-url input if the index can't support the check.
+        args=(uv publish $FILES --publish-url "$PUBLISH_URL")
+        if [ "$CHECK_URL_ENABLED" = "true" ]; then
+          args+=(--check-url "$CHECK_URL")
+        fi
+        "${args[@]}"
