@@ -1,4 +1,4 @@
-name: Publish Python Package to CodeArtifact
+name: uv Publish to CodeArtifact
 description: >
   Publishes an already-built Python wheel/sdist to an AWS CodeArtifact pypi
   repository via `uv publish`. Installs uv and authenticates with

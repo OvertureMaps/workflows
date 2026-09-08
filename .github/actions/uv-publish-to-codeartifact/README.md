@@ -1,4 +1,4 @@
-# Publish Python Package to CodeArtifact <!-- omit in toc -->
+# uv Publish to CodeArtifact <!-- omit in toc -->
 
 A composite GitHub Action that publishes an already-built Python wheel/sdist to an AWS CodeArtifact pypi repository via `uv publish`. It installs `uv`, authenticates with CodeArtifact, and publishes — re-running it for a version that's already published is a no-op instead of a failure.
 
@@ -26,7 +26,7 @@ jobs:
       - run: uv build
 
       - name: Publish to CodeArtifact
-        uses: OvertureMaps/workflows/.github/actions/publish-pypi-to-codeartifact@main
+        uses: OvertureMaps/workflows/.github/actions/uv-publish-to-codeartifact@main
         with:
           aws-role-arn: arn:aws:iam::123456789012:role/codeartifact-publisher
           codeartifact-domain: overture-pypi
@@ -35,7 +35,7 @@ jobs:
 ```
 
 > Pin to a commit SHA rather than `@main` for reproducible builds, e.g.
-> `uses: OvertureMaps/workflows/.github/actions/publish-pypi-to-codeartifact@<sha>`.
+> `uses: OvertureMaps/workflows/.github/actions/uv-publish-to-codeartifact@<sha>`.
 
 ### Dual-publish to two CodeArtifact accounts
 
@@ -45,7 +45,7 @@ action twice with distinct role/domain/owner inputs:
 
 ```yaml
 - name: Publish to legacy CodeArtifact
-  uses: OvertureMaps/workflows/.github/actions/publish-pypi-to-codeartifact@main
+  uses: OvertureMaps/workflows/.github/actions/uv-publish-to-codeartifact@main
   with:
     aws-role-arn: arn:aws:iam::505071440022:role/codeartifact-publisher
     codeartifact-domain: overture-pypi
@@ -53,7 +53,7 @@ action twice with distinct role/domain/owner inputs:
     codeartifact-repository: overture
 
 - name: Publish to MCD CodeArtifact
-  uses: OvertureMaps/workflows/.github/actions/publish-pypi-to-codeartifact@main
+  uses: OvertureMaps/workflows/.github/actions/uv-publish-to-codeartifact@main
   with:
     aws-role-arn: arn:aws:iam::763944545891:role/codeartifact-publisher
     codeartifact-domain: overture-pypi
@@ -69,7 +69,7 @@ publishing to the other.
 
 ```yaml
 - name: Publish to CodeArtifact
-  uses: OvertureMaps/workflows/.github/actions/publish-pypi-to-codeartifact@main
+  uses: OvertureMaps/workflows/.github/actions/uv-publish-to-codeartifact@main
   with:
     aws-role-arn: arn:aws:iam::123456789012:role/codeartifact-publisher
     codeartifact-domain: overture-pypi
