@@ -1,0 +1,105 @@
+name: uv Publish to CodeArtifact
+description: >
+  Publishes an already-built Python wheel/sdist to an AWS CodeArtifact pypi
+  repository via `uv publish`. Authenticates with CodeArtifact internally —
+  suitable for drop-in use right after a build step. Does not build the
+  package itself, since Python versioning/build conventions vary too much
+  across repos; build into `dist/` (or the directory named by `files`)
+  before calling this action. Requires `uv` to already be on `PATH`
+  (typically installed via `astral-sh/setup-uv` to build the package).
+
+inputs:
+  aws-role-arn:
+    description: IAM role ARN to assume via OIDC for CodeArtifact access
+    required: true
+  aws-region:
+    description: AWS region where CodeArtifact is hosted
+    required: false
+    default: us-west-2
+  codeartifact-domain:
+    description: CodeArtifact domain name
+    required: true
+  codeartifact-domain-owner:
+    description: AWS account ID that owns the CodeArtifact domain
+    required: true
+  codeartifact-repository:
+    description: CodeArtifact repository name
+    required: true
+  files:
+    description: >
+      Glob of already-built distribution files to publish (wheels/sdists).
+      Resolved relative to working-directory.
+    required: false
+    default: dist/*
+  working-directory:
+    description: >
+      Directory containing the built distribution files. Defaults to the
+      repository root. Set this to publish a project that lives in a
+      subdirectory.
+    required: false
+    default: "."
+  check-url:
+    description: >
+      Whether to pass `--check-url` (the CodeArtifact pypi index URL) to
+      `uv publish`, so re-running this action for an already-published
+      version skips re-uploading identical files instead of failing.
+      Defaults to true. Set to false only if this index doesn't support the
+      check (e.g. it can't be queried the way `--check-url` expects) or if
+      duplicate versions should hard-fail instead of no-op.
+    required: false
+    default: "true"
+
+outputs:
+  version:
+    description: >
+      The version string parsed from the published filename(s) (e.g.
+      `1.2.3`), for chaining into a later step such as tagging a release.
+    value: ${{ steps.publish.outputs.version }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Authenticate with CodeArtifact
+      id: codeartifact
+      uses: OvertureMaps/workflows/.github/actions/setup-codeartifact@main # zizmor: ignore[unpinned-uses] -- trusted same-repo self-reference; pinned to the branch-protected default branch by design
+      with:
+        aws-role-arn: ${{ inputs.aws-role-arn }}
+        aws-region: ${{ inputs.aws-region }}
+        codeartifact-domain: ${{ inputs.codeartifact-domain }}
+        codeartifact-domain-owner: ${{ inputs.codeartifact-domain-owner }}
+        codeartifact-repository: ${{ inputs.codeartifact-repository }}
+        format: pypi
+
+    - name: Publish to CodeArtifact
+      id: publish
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      env:
+        FILES: ${{ inputs.files }}
+        UV_PUBLISH_USERNAME: aws
+        UV_PUBLISH_PASSWORD: ${{ steps.codeartifact.outputs.token }}
+        PUBLISH_URL: ${{ steps.codeartifact.outputs.pypi-publish-url }}
+        CHECK_URL: ${{ steps.codeartifact.outputs.pypi-index-url }}
+        CHECK_URL_ENABLED: ${{ inputs.check-url }}
+      run: |
+        # --check-url skips re-uploading any file that's already published
+        # byte-identical at that index, making re-runs of this step a no-op
+        # for versions already in CodeArtifact instead of failing. Opt out
+        # via the check-url input if the index can't support the check.
+        args=(uv publish $FILES --publish-url "$PUBLISH_URL")
+        if [ "$CHECK_URL_ENABLED" = "true" ]; then
+          args+=(--check-url "$CHECK_URL")
+        fi
+        "${args[@]}"
+
+        # Parse the version from the first matched file's name (wheels and
+        # sdists both normalize the distribution name to have no hyphens, so
+        # splitting on "-" after stripping the extension reliably isolates
+        # the version field regardless of build backend).
+        matched_files=($FILES)
+        filename=$(basename "${matched_files[0]}")
+        base="${filename%.whl}"
+        base="${base%.tar.gz}"
+        base="${base%.zip}"
+        version=$(echo "$base" | cut -d- -f2)
+        echo "version=$version" >> "$GITHUB_OUTPUT"
