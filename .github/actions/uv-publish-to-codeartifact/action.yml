@@ -49,6 +49,13 @@ inputs:
     required: false
     default: "true"
 
+outputs:
+  version:
+    description: >
+      The version string parsed from the published filename(s) (e.g.
+      `1.2.3`), for chaining into a later step such as tagging a release.
+    value: ${{ steps.publish.outputs.version }}
+
 runs:
   using: "composite"
   steps:
@@ -64,6 +71,7 @@ runs:
         format: pypi
 
     - name: Publish to CodeArtifact
+      id: publish
       shell: bash
       working-directory: ${{ inputs.working-directory }}
       env:
@@ -83,3 +91,15 @@ runs:
           args+=(--check-url "$CHECK_URL")
         fi
         "${args[@]}"
+
+        # Parse the version from the first matched file's name (wheels and
+        # sdists both normalize the distribution name to have no hyphens, so
+        # splitting on "-" after stripping the extension reliably isolates
+        # the version field regardless of build backend).
+        matched_files=($FILES)
+        filename=$(basename "${matched_files[0]}")
+        base="${filename%.whl}"
+        base="${base%.tar.gz}"
+        base="${base%.zip}"
+        version=$(echo "$base" | cut -d- -f2)
+        echo "version=$version" >> "$GITHUB_OUTPUT"

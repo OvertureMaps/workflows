@@ -26,12 +26,18 @@ jobs:
       - run: uv build
 
       - name: Publish to CodeArtifact
+        id: publish
         uses: OvertureMaps/workflows/.github/actions/uv-publish-to-codeartifact@main
         with:
           aws-role-arn: arn:aws:iam::123456789012:role/codeartifact-publisher
           codeartifact-domain: overture-pypi
           codeartifact-domain-owner: "123456789012"
           codeartifact-repository: overture
+
+      - name: Tag the release
+        run: gh release create "v${{ steps.publish.outputs.version }}" --generate-notes
+        env:
+          GH_TOKEN: ${{ github.token }}
 ```
 
 > Pin to a commit SHA rather than `@main` for reproducible builds, e.g.
@@ -93,10 +99,7 @@ publishing to the other.
 
 ### Outputs
 
-This action has no outputs. Its job ends at publish; if a later step needs
-CodeArtifact metadata (domain, region, tokens, etc.), call
-[`setup-codeartifact`](../setup-codeartifact/README.md) directly instead of
-(or alongside) this action.
+- `version`: The version string parsed from the published filename(s) (e.g. `1.2.3`), for chaining into a later step such as tagging a release. Parsed from the first file matched by `files`, not queried from CodeArtifact.
 
 ### Permissions
 
@@ -128,7 +131,10 @@ The action runs two steps: authenticates with CodeArtifact (delegated to
 then runs `uv publish` with the composed publish/index URLs and the
 CodeArtifact token as credentials. It assumes `uv` is already on `PATH` (see
 [Requirements](#requirements)) rather than installing it, since the caller
-almost always ran `astral-sh/setup-uv` already to build the package.
+almost always ran `astral-sh/setup-uv` already to build the package. After a
+successful publish, it parses the `version` output from the first file
+matched by `files`, since that's not something the action was given directly
+as an input.
 
 ### Why this action doesn't build the package
 
