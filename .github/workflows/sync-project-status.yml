@@ -64,7 +64,7 @@ jobs:
             PROJECT_MANAGER_PEM,${{ env.PROJECT_MANAGER_PEM_SECRET_ID }}
 
       - name: Sync project statuses
-        uses: ./.github/actions/sync-project-status
+        uses: $/.github/actions/sync-project-status
         with:
           clientId: ${{ env.PROJECT_MANAGER_APP_CLIENT_ID }}
           privateKey: ${{ env.PROJECT_MANAGER_PEM }}
