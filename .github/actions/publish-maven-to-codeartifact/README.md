@@ -119,6 +119,18 @@ The assumed IAM role must allow `codeartifact:GetAuthorizationToken`,
   default to the workspace HEAD. Pass the `commit` input if the tree is not a
   git checkout.
 
+### Testing
+
+The `mvn` argument and JAR-resolution logic lives in `scripts/*.sh`, not
+inline in `action.yml`, so it can run under [bats](https://bats-core.readthedocs.io/)
+without a real Maven build or CodeArtifact credentials. `tests/*.bats` covers
+each script; `.github/workflows/test-publish-maven-to-codeartifact.yml` runs
+them on any change under this directory. Run them locally with:
+
+```sh
+bats .github/actions/publish-maven-to-codeartifact/tests/
+```
+
 ## Explanation
 
 ### What it does

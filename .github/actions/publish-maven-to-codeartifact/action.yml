@@ -134,28 +134,12 @@ runs:
         REVISION: ${{ inputs.revision }}
         PROFILES: ${{ inputs.profiles }}
         PROJECTS: ${{ inputs.projects }}
+        ACTION_PATH: ${{ github.action_path }}
       run: |
-        # Default build.commit to the checked-out HEAD so the manifest matches the
-        # tree actually built. On pull_request, github.sha is the merge-ref SHA.
-        BUILD_COMMIT="$COMMIT_OVERRIDE"
-        if [ -z "$BUILD_COMMIT" ]; then
-          BUILD_COMMIT=$(git rev-parse HEAD)
-        fi
+        export BUILD_COMMIT
+        BUILD_COMMIT=$("$ACTION_PATH/scripts/resolve-build-commit.sh")
 
-        args=(clean deploy -ntp
-          -DaltDeploymentRepository="$MAVEN_REPOSITORY_ID::$CODEARTIFACT_REPO_URL"
-          -Dbuild.branch="$BUILD_BRANCH"
-          -Dbuild.commit="$BUILD_COMMIT"
-          -Dworkflow.run_id="$WORKFLOW_RUN_ID"
-          -Dworkflow.run_number="$WORKFLOW_RUN_NUMBER"
-          -Dmaven.test.skip="true"
-          -Denv="$BUILD_ENV"
-          --settings ~/.m2/settings.xml)
-
-        [ -n "$REVISION" ] && args+=(-Drevision="$REVISION")
-        [ -n "$PROFILES" ] && args+=(-P"$PROFILES")
-        [ -n "$PROJECTS" ] && args+=(-pl "$PROJECTS")
-
+        mapfile -t args < <("$ACTION_PATH/scripts/build-mvn-deploy-args.sh")
         mvn "${args[@]}"
 
     - name: Print JAR Manifest Entries
@@ -163,21 +147,10 @@ runs:
       env:
         PROJECTS: ${{ inputs.projects }}
         WORKING_DIRECTORY: ${{ inputs.working-directory }}
+        ACTION_PATH: ${{ github.action_path }}
       run: |
-        # Profiles built from the root pom (`-pl`) put artifacts under the
-        # module's own target/, not the root's.
-        TARGET_DIR="target"
-        if [ -n "$PROJECTS" ]; then
-          TARGET_DIR="${PROJECTS%%,*}/target"
-        fi
-        TARGET_DIR="$WORKING_DIRECTORY/$TARGET_DIR"
-
-        JAR_FILE=$(find "$TARGET_DIR" -name "*-shaded.jar" -print -quit 2>/dev/null)
+        JAR_FILE=$("$ACTION_PATH/scripts/find-jar.sh")
         if [ -z "$JAR_FILE" ]; then
-          JAR_FILE=$(find "$TARGET_DIR" -maxdepth 1 -name "*.jar" -print -quit 2>/dev/null)
-        fi
-        if [ -z "$JAR_FILE" ]; then
-          echo "::warning::No JAR found in $TARGET_DIR; skipping manifest printout."
           exit 0
         fi
         echo "Extracting MANIFEST.MF from $JAR_FILE..."
