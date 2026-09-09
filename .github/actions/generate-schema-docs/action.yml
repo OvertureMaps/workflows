@@ -63,6 +63,9 @@ runs:
       shell: bash
       working-directory: ${{ inputs.schema-path }}
       run: uv sync --package overture-schema --package overture-schema-codegen --no-dev
+      env:
+        PYTHONUTF8: '1'
+        PYTHONIOENCODING: utf-8
 
     - name: Generate markdown docs
       shell: bash
@@ -70,3 +73,5 @@ runs:
       run: uv run overture-codegen generate --format markdown --output-dir "${INPUTS_OUTPUT_DIR}"
       env:
         INPUTS_OUTPUT_DIR: ${{ inputs.output-dir }}
+        PYTHONUTF8: '1'
+        PYTHONIOENCODING: utf-8
