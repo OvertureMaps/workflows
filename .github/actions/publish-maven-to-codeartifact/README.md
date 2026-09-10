@@ -161,7 +161,8 @@ non-empty `version` overrides the pom version via `versions:set` (rewriting
 the pom in the checkout); a non-empty `revision` instead passes `-Drevision`
 straight to `mvn deploy`, for poms that resolve their version from the
 CI-friendly `${revision}` property. Use whichever matches how your pom
-declares its version — they're mutually exclusive.
+declares its version — they're mutually exclusive, and the action fails fast
+in a validation step if both are set.
 
 ### Building a single module from a multi-platform aggregator pom
 
