@@ -34,7 +34,31 @@ inputs:
     description: >
       Optional artifact version. When set, the pom version is overridden via
       `mvn versions:set` and the project is built with dev naming. When empty,
-      the project's release version is published unchanged.
+      the project's release version is published unchanged. Mutually exclusive
+      with `revision`.
+    required: false
+    default: ""
+  revision:
+    description: >
+      Optional value for the `-Drevision` property, for poms that use the
+      CI-friendly `${revision}` version placeholder instead of a hardcoded
+      version. Passed straight through to `mvn deploy` rather than rewriting
+      the pom via `versions:set`. Mutually exclusive with `version`.
+    required: false
+    default: ""
+  profiles:
+    description: >
+      Comma-separated list of Maven profiles to activate, passed as `-P` (e.g.
+      `spark35` or `spark35,extra-profile`).
+    required: false
+    default: ""
+  projects:
+    description: >
+      Comma-separated list of Maven reactor projects to build, passed as
+      `-pl`. Use this to build a single module from a multi-module pom instead
+      of `working-directory`, e.g. when profiles live in the root pom and the
+      module can't be built standalone. When set, the manifest step looks for
+      the JAR under `<projects>/target` instead of `target`.
     required: false
     default: ""
   working-directory:
@@ -44,6 +68,14 @@ inputs:
       in a subdirectory.
     required: false
     default: "."
+  java-version:
+    description: >
+      Optional JDK version to use, overriding the `.java-version` file in
+      `working-directory`. Set this when the same tree needs different JDKs
+      for different matrix rows (e.g. Java 11 for one Spark line, 17 for
+      another).
+    required: false
+    default: ""
   commit:
     description: >
       Commit SHA recorded as `build.commit` in the JAR manifest. Defaults to the
@@ -57,11 +89,20 @@ inputs:
 runs:
   using: "composite"
   steps:
+    - name: Validate inputs
+      shell: bash
+      env:
+        VERSION: ${{ inputs.version }}
+        REVISION: ${{ inputs.revision }}
+        ACTION_PATH: ${{ github.action_path }}
+      run: "$ACTION_PATH/scripts/validate-inputs.sh"
+
     - name: Set up JDK
       uses: actions/setup-java@dd06d9cba3e5552c54d9f8ea23572deb30010f7c # v6.0.0
       with:
         distribution: "temurin"
-        java-version-file: "${{ inputs.working-directory }}/.java-version"
+        java-version: ${{ inputs.java-version }}
+        java-version-file: ${{ inputs.java-version == '' && format('{0}/.java-version', inputs.working-directory) || '' }}
         cache: maven
         cache-dependency-path: "${{ inputs.working-directory }}/pom.xml"
 
@@ -76,7 +117,7 @@ runs:
         maven-repository-id: ${{ inputs.maven-repository-id }}
 
     - name: Set dev version
-      if: ${{ inputs.version != '' }}
+      if: ${{ inputs.version != '' && inputs.revision == '' }}
       shell: bash
       working-directory: ${{ inputs.working-directory }}
       env:
@@ -93,36 +134,32 @@ runs:
       env:
         MAVEN_REPOSITORY_ID: ${{ inputs.maven-repository-id }}
         CODEARTIFACT_REPO_URL: "https://${{ inputs.codeartifact-domain }}-${{ inputs.codeartifact-domain-owner }}.d.codeartifact.${{ inputs.aws-region }}.amazonaws.com/maven/${{ inputs.codeartifact-repository }}/"
-        BUILD_ENV: ${{ inputs.version != '' && 'dev' || 'release' }}
+        BUILD_ENV: ${{ (inputs.version != '' || inputs.revision != '') && 'dev' || 'release' }}
         BUILD_BRANCH: ${{ github.ref_name }}
         COMMIT_OVERRIDE: ${{ inputs.commit }}
         WORKFLOW_RUN_ID: ${{ github.run_id }}
         WORKFLOW_RUN_NUMBER: ${{ github.run_number }}
+        REVISION: ${{ inputs.revision }}
+        PROFILES: ${{ inputs.profiles }}
+        PROJECTS: ${{ inputs.projects }}
+        ACTION_PATH: ${{ github.action_path }}
       run: |
-        # Default build.commit to the checked-out HEAD so the manifest matches the
-        # tree actually built. On pull_request, github.sha is the merge-ref SHA.
-        BUILD_COMMIT="$COMMIT_OVERRIDE"
-        if [ -z "$BUILD_COMMIT" ]; then
-          BUILD_COMMIT=$(git rev-parse HEAD)
-        fi
-        mvn clean deploy -ntp \
-          -DaltDeploymentRepository="$MAVEN_REPOSITORY_ID::$CODEARTIFACT_REPO_URL" \
-          -Dbuild.branch="$BUILD_BRANCH" \
-          -Dbuild.commit="$BUILD_COMMIT" \
-          -Dworkflow.run_id="$WORKFLOW_RUN_ID" \
-          -Dworkflow.run_number="$WORKFLOW_RUN_NUMBER" \
-          -Dmaven.test.skip="true" \
-          -Denv="$BUILD_ENV" \
-          --settings ~/.m2/settings.xml
+        export BUILD_COMMIT
+        BUILD_COMMIT=$("$ACTION_PATH/scripts/resolve-build-commit.sh")
+
+        mapfile -t args < <("$ACTION_PATH/scripts/build-mvn-deploy-args.sh")
+        mvn "${args[@]}"
 
     - name: Print JAR Manifest Entries
       shell: bash
-      working-directory: ${{ inputs.working-directory }}
+      env:
+        PROJECTS: ${{ inputs.projects }}
+        WORKING_DIRECTORY: ${{ inputs.working-directory }}
+        ACTION_PATH: ${{ github.action_path }}
       run: |
-        JAR_FILE=$(find target -name "*-shaded.jar" -print -quit)
+        JAR_FILE=$("$ACTION_PATH/scripts/find-jar.sh")
         if [ -z "$JAR_FILE" ]; then
-          echo "Error: No shaded JAR found in target/" >&2
-          exit 1
+          exit 0
         fi
         echo "Extracting MANIFEST.MF from $JAR_FILE..."
         unzip -p "$JAR_FILE" META-INF/MANIFEST.MF
