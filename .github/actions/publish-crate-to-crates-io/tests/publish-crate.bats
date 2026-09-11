@@ -26,6 +26,7 @@ setup() {
   unset RELEASE_TAG MAX_BYTES DRY_RUN_ONLY MOCK_FAIL_STAGE
   unset MOCK_MISSING_PACKAGE MOCK_INVALID_METADATA MOCK_INCLUDE_OTHER_PACKAGE CARGO_TARGET_DIR
   unset CARGO_REGISTRY_TOKEN CARGO_REGISTRIES_CRATES_IO_TOKEN
+  unset GITHUB_REPOSITORY GITHUB_WORKFLOW_REF
   : > "$GITHUB_OUTPUT"
   : > "$GITHUB_STEP_SUMMARY"
   : > "$MOCK_CARGO_LOG"
@@ -109,54 +110,31 @@ assert_no_publish() {
   assert_calls metadata
 }
 
-@test "accepts a package one byte below the default limit" {
-  export MOCK_CRATE_SIZE=10485759
-  run_action
+@test "enforces the packaged size limit at each boundary" {
+  local case size limit expect_status
+  # size max_bytes expect_status, one row per limit boundary case
+  local -a cases=(
+    "10485759 10485760 0" # one byte below the default limit
+    "10485760 10485760 0" # exactly at the default limit
+    "10485761 10485760 1" # one byte above the default limit
+    "32 31 1"             # smaller custom limit rejects
+    "32 32 0"             # exactly at a custom limit
+    "10485761 10485761 0" # larger custom limit accepts
+  )
+  for case in "${cases[@]}"; do
+    read -r size limit expect_status <<< "$case"
+    export MOCK_CRATE_SIZE="$size" MAX_BYTES="$limit"
+    : > "$MOCK_CARGO_LOG"
+    : > "$GITHUB_OUTPUT"
+    run_action
 
-  [ "$status" -eq 0 ]
-  grep -qx size=10485759 "$GITHUB_OUTPUT"
-}
-
-@test "accepts a package exactly at the default limit" {
-  export MOCK_CRATE_SIZE=10485760
-  run_action
-
-  [ "$status" -eq 0 ]
-  grep -qx size=10485760 "$GITHUB_OUTPUT"
-}
-
-@test "rejects a package one byte above the default limit" {
-  export MOCK_CRATE_SIZE=10485761
-  run_action
-
-  [ "$status" -eq 1 ]
-  [[ "$output" == *"exceeding the 10485760-byte limit"* ]]
-  grep -qx size=10485761 "$GITHUB_OUTPUT"
-  assert_calls $'metadata\ndry-run\npackage'
-  assert_no_publish
-}
-
-@test "honors a smaller custom size limit" {
-  export MAX_BYTES=31
-  run_action
-
-  [ "$status" -eq 1 ]
-  [[ "$output" == *"exceeding the 31-byte limit"* ]]
-  assert_no_publish
-}
-
-@test "accepts a package exactly at a custom size limit" {
-  export MAX_BYTES=32
-  run_action
-
-  [ "$status" -eq 0 ]
-}
-
-@test "honors a larger custom size limit" {
-  export MAX_BYTES=10485761 MOCK_CRATE_SIZE=10485761
-  run_action
-
-  [ "$status" -eq 0 ]
+    [ "$status" -eq "$expect_status" ]
+    grep -qx "size=$size" "$GITHUB_OUTPUT"
+    if [ "$expect_status" -ne 0 ]; then
+      [[ "$output" == *"exceeding the ${limit}-byte limit"* ]]
+      assert_no_publish
+    fi
+  done
 }
 
 @test "rejects malformed size limits without publishing" {
@@ -304,6 +282,22 @@ assert_no_publish() {
   [ "$status" -eq 0 ]
   [ "$(cat "$GITHUB_OUTPUT")" = $'name=example-crate\nversion=1.2.3\nsize=32' ]
   [[ "$output" != *"other-crate"* ]]
+}
+
+@test "echoes the Trusted Publisher config surface from GitHub's default environment variables" {
+  export GITHUB_REPOSITORY="OvertureMaps/example-crate"
+  export GITHUB_WORKFLOW_REF="OvertureMaps/example-crate/.github/workflows/release.yml@refs/heads/main"
+  run_action
+
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"::notice::Trusted Publisher config surface for example-crate: repository OvertureMaps/example-crate, workflow .github/workflows/release.yml."* ]]
+}
+
+@test "falls back to unknown repository and workflow outside GitHub Actions" {
+  run_action
+
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"::notice::Trusted Publisher config surface for example-crate: repository unknown, workflow unknown."* ]]
 }
 
 @test "rejects invalid manifest JSON or missing manifest fields" {

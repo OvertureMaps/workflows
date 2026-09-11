@@ -21,11 +21,8 @@ trap finish_publish EXIT
 manifest_dir="$(cd -- "$(dirname -- "$MANIFEST_PATH")" && pwd)"
 manifest_abs="$manifest_dir/$(basename -- "$MANIFEST_PATH")"
 
-# cargo read-manifest is deprecated (https://doc.rust-lang.org/cargo/commands/deprecated-and-removed.html);
-# cargo metadata is the stable replacement, and it doubles as the one place we
-# learn target_directory for the size check later. Select the package whose
-# manifest_path matches the requested manifest, since a workspace's metadata
-# lists every member.
+# Select the package whose manifest_path matches the requested manifest,
+# since a workspace's metadata lists every member.
 metadata=$(cargo metadata --no-deps --format-version 1 --manifest-path "$MANIFEST_PATH")
 export CRATE_NAME CRATE_VERSION TARGET_DIRECTORY
 CRATE_NAME=$(jq -er --arg manifest "$manifest_abs" \
@@ -35,6 +32,7 @@ CRATE_VERSION=$(jq -er --arg manifest "$manifest_abs" \
 TARGET_DIRECTORY=$(jq -er '.target_directory | strings | select(length > 0)' <<< "$metadata")
 echo "name=$CRATE_NAME" >> "$GITHUB_OUTPUT"
 echo "version=$CRATE_VERSION" >> "$GITHUB_OUTPUT"
+bash "$script_dir/describe-trusted-publisher.sh"
 
 stage="Verify release tag"
 bash "$script_dir/verify-release-tag.sh"
