@@ -14,6 +14,7 @@ setup() {
   export ACTION_PATH="$action_dir"
   export MANIFEST_PATH="$workdir/member crate/Cargo.toml"
   export GITHUB_OUTPUT="$workdir/github output"
+  export GITHUB_STEP_SUMMARY="$workdir/job summary"
   export MOCK_CARGO_LOG="$workdir/cargo calls"
   export MOCK_MANIFEST_JSON="$BATS_TEST_DIRNAME/fixtures/manifest.json"
   export MOCK_WORKSPACE_ROOT="$workdir"
@@ -26,6 +27,7 @@ setup() {
   unset MOCK_MISSING_PACKAGE MOCK_INVALID_METADATA CARGO_TARGET_DIR
   unset CARGO_REGISTRY_TOKEN CARGO_REGISTRIES_CRATES_IO_TOKEN
   : > "$GITHUB_OUTPUT"
+  : > "$GITHUB_STEP_SUMMARY"
   : > "$MOCK_CARGO_LOG"
   : > "$CARGO_HOME/credentials.toml"
 }
@@ -345,6 +347,136 @@ assert_no_publish() {
 
   [ "$status" -eq 0 ]
   assert_calls $'read-manifest\ndry-run\npackage\nmetadata\npublish'
+}
+
+@test "successful publish writes the complete summary table" {
+  export RELEASE_TAG=v1.2.3
+  run_action
+
+  [ "$status" -eq 0 ]
+  expected=$(cat <<'MARKDOWN'
+
+### Crate publishing
+
+| Field | Value |
+| --- | --- |
+| Crate | example-crate |
+| Version | 1.2.3 |
+| Release-tag check | Matched |
+| Package size | 32 bytes |
+| Size limit | 10485760 bytes |
+| Result | Published |
+MARKDOWN
+)
+  [ "$(cat "$GITHUB_STEP_SUMMARY")" = "$expected" ]
+}
+
+@test "dry-run summary distinguishes skipped tags and never claims publication" {
+  export DRY_RUN_ONLY=true
+  run_action
+
+  [ "$status" -eq 0 ]
+  grep -Fx '| Release-tag check | Skipped |' "$GITHUB_STEP_SUMMARY"
+  grep -Fx '| Result | Dry-run passed |' "$GITHUB_STEP_SUMMARY"
+  ! grep -q Published "$GITHUB_STEP_SUMMARY"
+}
+
+@test "tag mismatch summary marks failure before package measurement" {
+  export RELEASE_TAG=v9.0.0
+  run_action
+
+  [ "$status" -eq 1 ]
+  grep -Fx '| Release-tag check | Failed |' "$GITHUB_STEP_SUMMARY"
+  grep -Fx '| Package size | Not measured |' "$GITHUB_STEP_SUMMARY"
+  grep -Fx '| Result | Failed: Verify release tag |' "$GITHUB_STEP_SUMMARY"
+}
+
+@test "oversize summary includes measured size and custom limit" {
+  export MAX_BYTES=31
+  run_action
+
+  [ "$status" -eq 1 ]
+  grep -Fx '| Package size | 32 bytes |' "$GITHUB_STEP_SUMMARY"
+  grep -Fx '| Size limit | 31 bytes |' "$GITHUB_STEP_SUMMARY"
+  grep -Fx '| Result | Failed: Check package size |' "$GITHUB_STEP_SUMMARY"
+}
+
+@test "Cargo failures report their stage and retain exit codes" {
+  local failure expected
+  for failure in read-manifest dry-run package metadata publish; do
+    case "$failure" in
+      read-manifest) expected="Read manifest" ;;
+      dry-run) expected="Dry-run publish" ;;
+      package) expected="Package" ;;
+      metadata) expected="Read package metadata" ;;
+      publish) expected="Publish" ;;
+    esac
+    : > "$GITHUB_STEP_SUMMARY"
+    export MOCK_FAIL_STAGE="$failure" RELEASE_TAG=v1.2.3
+    run_action
+
+    [ "$status" -eq 42 ]
+    grep -Fx "| Result | Failed: $expected |" "$GITHUB_STEP_SUMMARY"
+    ! grep -q '| Result | Published |' "$GITHUB_STEP_SUMMARY"
+    if [ "$failure" = read-manifest ]; then
+      grep -Fx '| Crate | Unavailable |' "$GITHUB_STEP_SUMMARY"
+      grep -Fx '| Version | Unavailable |' "$GITHUB_STEP_SUMMARY"
+      grep -Fx '| Release-tag check | Not checked |' "$GITHUB_STEP_SUMMARY"
+    fi
+  done
+}
+
+@test "multiple crate invocations append without overwriting earlier summaries" {
+  printf 'Existing job notes\n' > "$GITHUB_STEP_SUMMARY"
+  run_action
+  [ "$status" -eq 0 ]
+  export DRY_RUN_ONLY=true
+  run_action
+
+  [ "$status" -eq 0 ]
+  [ "$(grep -c '^### Crate publishing$' "$GITHUB_STEP_SUMMARY")" -eq 2 ]
+  grep -Fx 'Existing job notes' "$GITHUB_STEP_SUMMARY"
+  grep -Fx '| Result | Published |' "$GITHUB_STEP_SUMMARY"
+  grep -Fx '| Result | Dry-run passed |' "$GITHUB_STEP_SUMMARY"
+}
+
+@test "local runs without a summary path retain normal behavior" {
+  unset GITHUB_STEP_SUMMARY
+  run_action
+
+  [ "$status" -eq 0 ]
+  assert_calls $'read-manifest\ndry-run\npackage\nmetadata\npublish'
+  [ ! -s "$workdir/job summary" ]
+}
+
+@test "summary write errors warn without replacing the publish exit status" {
+  export GITHUB_STEP_SUMMARY="$workdir"
+  run_action
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"::warning::Could not write crate publishing job summary"* ]]
+
+  export MOCK_FAIL_STAGE=publish
+  run_action
+  [ "$status" -eq 42 ]
+  [[ "$output" == *"::warning::Could not write crate publishing job summary"* ]]
+}
+
+@test "summary escapes table delimiters markup and newlines" {
+  run bash -c 'source "$ACTION_PATH/scripts/job-summary.sh"; summary_cell "$1"' \
+    -- $'<tag> & | `value`\r\nnext'
+
+  [ "$status" -eq 0 ]
+  [ "$output" = '&lt;tag&gt; &amp; &#124; &#96;value&#96;  next' ]
+}
+
+@test "summary does not contain consumer credentials or authentication claims" {
+  export CARGO_REGISTRY_TOKEN="private-consumer-token"
+  export MOCK_EXPECT_TOKEN="$CARGO_REGISTRY_TOKEN"
+  run_action
+
+  [ "$status" -eq 0 ]
+  ! grep -q "$CARGO_REGISTRY_TOKEN" "$GITHUB_STEP_SUMMARY"
+  ! grep -iq 'auth\|token' "$GITHUB_STEP_SUMMARY"
 }
 
 @test "action wiring preserves public outputs and delegates all authentication" {

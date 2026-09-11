@@ -134,6 +134,15 @@ Checkout needs `contents: read`.
 - `cargo` and `jq` on `PATH` (both preinstalled on GitHub-hosted `ubuntu-latest` runners).
 - For a real publish, the caller obtains a short-lived token through crates.io Trusted Publishing/OIDC and passes it as `CARGO_REGISTRY_TOKEN` through the calling step's `env`. No credentials are needed for `dry-run-only: true`.
 
+### Job summary
+
+Each invocation appends a crate table to `$GITHUB_STEP_SUMMARY` with the name,
+version, release-tag check, package size and limit in bytes, and result.
+Failed runs name the failed stage and retain the original exit code.
+Unmeasured sizes are marked `Not measured`; `Published` appears only after
+`cargo publish` succeeds. The summary contains no credentials or authentication
+status. Local runs without `$GITHUB_STEP_SUMMARY` skip the summary.
+
 ## Testing
 
 Run from the repository root with Bats 1.5.0 or later, Bash, `jq`, GNU `stat`,
@@ -145,7 +154,8 @@ bats .github/actions/publish-crate-to-crates-io/tests/
 
 The tests execute the action's shell entrypoint with mocked Cargo commands and
 local fixtures. They cover release tags, size limits, paths with spaces, Cargo
-failures, outputs, and inherited credentials without network builds or publication.
+failures, outputs, job summaries, and inherited credentials without network builds
+or publication.
 The path-filtered `test-publish-crate-to-crates-io.yml` workflow runs the same suite.
 Real Cargo builds, crates.io authentication, and publication need a consumer workflow
 test.

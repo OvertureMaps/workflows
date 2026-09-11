@@ -1,15 +1,19 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+stage="Validate size limit"
 if [[ ! "$MAX_BYTES" =~ ^[0-9]+$ ]]; then
   echo "::error::max-crate-size-bytes must be a non-negative integer"
   exit 1
 fi
 
+stage="Package"
 cargo package --locked --manifest-path "$MANIFEST_PATH"
+stage="Read package metadata"
 metadata=$(cargo metadata --no-deps --format-version 1 --manifest-path "$MANIFEST_PATH")
 target_directory=$(jq -er '.target_directory | strings | select(length > 0)' <<< "$metadata")
 crate_file="${target_directory}/package/${CRATE_NAME}-${CRATE_VERSION}.crate"
+stage="Check package size"
 size=$(stat --format=%s "$crate_file")
 echo "$CRATE_NAME package size: ${size} bytes"
 echo "size=$size" >> "$GITHUB_OUTPUT"
