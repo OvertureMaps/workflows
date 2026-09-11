@@ -1,0 +1,92 @@
+---
+name: Label External Issues
+description: >
+  Labels org-wide issues opened by non-org-members. Runs on a schedule so it
+  covers every repo the app is installed on, without adding a workflow to
+  each repo individually.
+
+inputs:
+  label:
+    description: Label to apply to issues opened by non-org-members
+    required: false
+    default: "external"
+  lookbackMinutes:
+    description: >
+      How far back (in minutes) to search for newly opened issues. Should be
+      comfortably larger than the schedule interval to tolerate missed/late
+      runs.
+    required: false
+    default: "180"
+  dryRun:
+    description: Log intended changes without applying them
+    required: false
+    default: "false"
+  clientId:
+    description: >
+      Client ID of a GitHub App installation token with org-level Members
+      read and repository Issues write access (this repo reuses
+      overture-project-manager, extended with those two permissions). The
+      default GITHUB_TOKEN cannot read org membership or write issues in
+      other repos.
+    required: true
+  privateKey:
+    description: >
+      GitHub App private key. Must come from an already-masked source: a
+      GitHub Actions secret or aws-actions/aws-secretsmanager-get-secrets
+      (both register masks at fetch time). This action re-masks the value
+      as defense in depth, but that cannot cover the value's handling
+      before it reaches this action.
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Mask private key
+      shell: bash
+      run: |
+        echo "::group::Masking private key"
+        # Defense in depth only: the PEM already crossed a step boundary as
+        # an input, so the caller's source must register its own masks
+        # (GitHub secrets and aws-secretsmanager-get-secrets both do).
+        # Line-by-line because a single ::add-mask:: on a multi-line value
+        # only registers the first line.
+        while IFS= read -r line; do
+          [ -n "$line" ] && echo "::add-mask::$line"
+        done <<< "$INPUTS_PRIVATEKEY"
+        echo "::endgroup::"
+      env:
+        INPUTS_PRIVATEKEY: ${{ inputs.privateKey }}
+
+    - name: Generate GitHub App token
+      id: app-token
+      uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0 # zizmor: ignore[github-app,ref-version-mismatch] -- shared org-management app, permissions extended for org-wide issue labeling
+      with:
+        client-id: ${{ inputs.clientId }}
+        private-key: ${{ inputs.privateKey }}
+        owner: ${{ github.repository_owner }} # zizmor: ignore[github-app] -- org-wide issue access is the point
+
+    - name: Label external issues
+      uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+      env:
+        LABEL: ${{ inputs.label }}
+        LOOKBACK_MINUTES: ${{ inputs.lookbackMinutes }}
+        DRY_RUN: ${{ inputs.dryRun }}
+      with:
+        github-token: ${{ steps.app-token.outputs.token }}
+        script: |
+          const path = require('path');
+          const run = require(path.join(process.env.GITHUB_ACTION_PATH, 'src', 'index.js'));
+          const lookbackMinutes = parseInt(process.env.LOOKBACK_MINUTES, 10);
+          if (!Number.isInteger(lookbackMinutes) || lookbackMinutes <= 0) {
+            core.setFailed(`lookbackMinutes must be a positive integer, got "${process.env.LOOKBACK_MINUTES}"`);
+            return;
+          }
+          const sinceIso = new Date(Date.now() - lookbackMinutes * 60_000).toISOString();
+          await run({
+            github,
+            core,
+            org: context.repo.owner,
+            label: process.env.LABEL,
+            sinceIso,
+            dryRun: process.env.DRY_RUN === 'true',
+          });
