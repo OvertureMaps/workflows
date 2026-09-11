@@ -168,7 +168,7 @@ Dry-run, size check, and version check are the same three commands
 (`cargo publish --dry-run`, `cargo package` + a `stat` on the `.crate`,
 comparing `Cargo.toml`'s version to a tag) whether they gate a real release
 or just validate packaging in CI. Consolidating them here means a workspace
-with several crates (or several repos) get all three checks for free, called
+with several crates (or several repos) gets all three checks for free, called
 once per crate, instead of each repo re-deriving its own dry-run/size/version
 script.
 

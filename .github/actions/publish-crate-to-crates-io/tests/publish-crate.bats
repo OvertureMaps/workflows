@@ -24,7 +24,7 @@ setup() {
   export MOCK_EXPECT_CREDENTIALS=""
   export MOCK_EXPECT_TOKEN=unset MOCK_EXPECT_NAMED_TOKEN=unset
   unset RELEASE_TAG MAX_BYTES DRY_RUN_ONLY MOCK_FAIL_STAGE
-  unset MOCK_MISSING_PACKAGE MOCK_INVALID_METADATA CARGO_TARGET_DIR
+  unset MOCK_MISSING_PACKAGE MOCK_INVALID_METADATA MOCK_INCLUDE_OTHER_PACKAGE CARGO_TARGET_DIR
   unset CARGO_REGISTRY_TOKEN CARGO_REGISTRIES_CRATES_IO_TOKEN
   : > "$GITHUB_OUTPUT"
   : > "$GITHUB_STEP_SUMMARY"
@@ -47,12 +47,12 @@ assert_no_publish() {
   ! grep -qx publish "$MOCK_CARGO_LOG"
 }
 
-@test "publishes with manifest outputs, exact command flags and default inputs" {
+@test "publishes with manifest outputs, exact command flags including --registry crates-io, and default inputs" {
   run_action
 
   [ "$status" -eq 0 ]
   [ "$(cat "$GITHUB_OUTPUT")" = $'name=example-crate\nversion=1.2.3\nsize=32' ]
-  assert_calls $'read-manifest\ndry-run\npackage\nmetadata\npublish'
+  assert_calls $'metadata\ndry-run\npackage\npublish'
   [[ "$output" != *"matches release tag"* ]]
 }
 
@@ -61,7 +61,7 @@ assert_no_publish() {
   run_action
 
   [ "$status" -eq 0 ]
-  assert_calls $'read-manifest\ndry-run\npackage\nmetadata\npublish'
+  assert_calls $'metadata\ndry-run\npackage\npublish'
 }
 
 @test "accepts a matching release tag" {
@@ -86,7 +86,7 @@ assert_no_publish() {
 
   [ "$status" -eq 1 ]
   [[ "$output" == *"does not match release tag (2.0.0)"* ]]
-  assert_calls read-manifest
+  assert_calls metadata
   assert_no_publish
 }
 
@@ -96,7 +96,7 @@ assert_no_publish() {
 
   [ "$status" -eq 1 ]
   [[ "$output" == *"does not match release tag (v1.2.3)"* ]]
-  assert_calls read-manifest
+  assert_calls metadata
 }
 
 @test "treats release tag shell syntax as data" {
@@ -106,7 +106,7 @@ assert_no_publish() {
 
   [ "$status" -eq 1 ]
   [ ! -e unexpected-tag-command ]
-  assert_calls read-manifest
+  assert_calls metadata
 }
 
 @test "accepts a package one byte below the default limit" {
@@ -132,7 +132,7 @@ assert_no_publish() {
   [ "$status" -eq 1 ]
   [[ "$output" == *"exceeding the 10485760-byte limit"* ]]
   grep -qx size=10485761 "$GITHUB_OUTPUT"
-  assert_calls $'read-manifest\ndry-run\npackage\nmetadata'
+  assert_calls $'metadata\ndry-run\npackage'
   assert_no_publish
 }
 
@@ -184,7 +184,7 @@ assert_no_publish() {
 
   [ "$status" -eq 0 ]
   grep -qx size=32 "$GITHUB_OUTPUT"
-  assert_calls $'read-manifest\ndry-run\npackage\nmetadata'
+  assert_calls $'metadata\ndry-run\npackage'
   assert_no_publish
 }
 
@@ -193,7 +193,7 @@ assert_no_publish() {
   run_action
 
   [ "$status" -eq 1 ]
-  assert_calls $'read-manifest\ndry-run\npackage\nmetadata'
+  assert_calls $'metadata\ndry-run\npackage'
   assert_no_publish
 }
 
@@ -202,7 +202,7 @@ assert_no_publish() {
   run_action
 
   [ "$status" -eq 0 ]
-  assert_calls $'read-manifest\ndry-run\npackage\nmetadata\npublish'
+  assert_calls $'metadata\ndry-run\npackage\npublish'
 }
 
 @test "explicit false publishes after validation" {
@@ -210,7 +210,7 @@ assert_no_publish() {
   run_action
 
   [ "$status" -eq 0 ]
-  assert_calls $'read-manifest\ndry-run\npackage\nmetadata\npublish'
+  assert_calls $'metadata\ndry-run\npackage\npublish'
 }
 
 @test "handles action, manifest, output and configured target paths with spaces" {
@@ -232,7 +232,7 @@ assert_no_publish() {
   run_action
 
   [ "$status" -eq 0 ]
-  assert_calls $'read-manifest\ndry-run\npackage\nmetadata\npublish'
+  assert_calls $'metadata\ndry-run\npackage\npublish'
 }
 
 @test "uses metadata target_directory with an inherited CARGO_TARGET_DIR" {
@@ -245,12 +245,12 @@ assert_no_publish() {
   [ ! -e "$workdir/target/package" ]
 }
 
-@test "propagates read-manifest failure without dry-run or publishing" {
-  export MOCK_FAIL_STAGE=read-manifest
+@test "propagates metadata failure without dry-run, packaging, or publishing" {
+  export MOCK_FAIL_STAGE=metadata
   run_action
 
   [ "$status" -eq 42 ]
-  assert_calls read-manifest
+  assert_calls metadata
   [ ! -s "$GITHUB_OUTPUT" ]
 }
 
@@ -259,25 +259,16 @@ assert_no_publish() {
   run_action
 
   [ "$status" -eq 42 ]
-  assert_calls $'read-manifest\ndry-run'
+  assert_calls $'metadata\ndry-run'
   assert_no_publish
 }
 
-@test "propagates package failure without metadata or publishing" {
+@test "propagates package failure without publishing" {
   export MOCK_FAIL_STAGE=package
   run_action
 
   [ "$status" -eq 42 ]
-  assert_calls $'read-manifest\ndry-run\npackage'
-  assert_no_publish
-}
-
-@test "propagates metadata failure without publishing" {
-  export MOCK_FAIL_STAGE=metadata
-  run_action
-
-  [ "$status" -eq 42 ]
-  assert_calls $'read-manifest\ndry-run\npackage\nmetadata'
+  assert_calls $'metadata\ndry-run\npackage'
   assert_no_publish
 }
 
@@ -286,7 +277,7 @@ assert_no_publish() {
   run_action
 
   [ "$status" -eq 42 ]
-  assert_calls $'read-manifest\ndry-run\npackage\nmetadata\npublish'
+  assert_calls $'metadata\ndry-run\npackage\npublish'
 }
 
 @test "fails on a missing package without publishing" {
@@ -304,6 +295,15 @@ assert_no_publish() {
 
   [ "$status" -ne 0 ]
   assert_no_publish
+}
+
+@test "selects the workspace member matching the requested manifest" {
+  export MOCK_INCLUDE_OTHER_PACKAGE=true
+  run_action
+
+  [ "$status" -eq 0 ]
+  [ "$(cat "$GITHUB_OUTPUT")" = $'name=example-crate\nversion=1.2.3\nsize=32' ]
+  [[ "$output" != *"other-crate"* ]]
 }
 
 @test "rejects invalid manifest JSON or missing manifest fields" {
@@ -324,7 +324,7 @@ assert_no_publish() {
   run_action
 
   [ "$status" -eq 0 ]
-  assert_calls $'read-manifest\ndry-run\npackage\nmetadata\npublish'
+  assert_calls $'metadata\ndry-run\npackage\npublish'
   [[ "$output" != *"$CARGO_REGISTRY_TOKEN"* ]]
 }
 
@@ -346,7 +346,7 @@ assert_no_publish() {
   run_action
 
   [ "$status" -eq 0 ]
-  assert_calls $'read-manifest\ndry-run\npackage\nmetadata\npublish'
+  assert_calls $'metadata\ndry-run\npackage\npublish'
 }
 
 @test "successful publish writes the complete summary table" {
@@ -403,22 +403,22 @@ MARKDOWN
 
 @test "Cargo failures report their stage and retain exit codes" {
   local failure expected
-  for failure in read-manifest dry-run package metadata publish; do
+  for failure in metadata dry-run package publish; do
     case "$failure" in
-      read-manifest) expected="Read manifest" ;;
+      metadata) expected="Read crate metadata" ;;
       dry-run) expected="Dry-run publish" ;;
       package) expected="Package" ;;
-      metadata) expected="Read package metadata" ;;
       publish) expected="Publish" ;;
     esac
     : > "$GITHUB_STEP_SUMMARY"
+    : > "$MOCK_CARGO_LOG"
     export MOCK_FAIL_STAGE="$failure" RELEASE_TAG=v1.2.3
     run_action
 
     [ "$status" -eq 42 ]
     grep -Fx "| Result | Failed: $expected |" "$GITHUB_STEP_SUMMARY"
     ! grep -q '| Result | Published |' "$GITHUB_STEP_SUMMARY"
-    if [ "$failure" = read-manifest ]; then
+    if [ "$failure" = metadata ]; then
       grep -Fx '| Crate | Unavailable |' "$GITHUB_STEP_SUMMARY"
       grep -Fx '| Version | Unavailable |' "$GITHUB_STEP_SUMMARY"
       grep -Fx '| Release-tag check | Not checked |' "$GITHUB_STEP_SUMMARY"
@@ -445,7 +445,7 @@ MARKDOWN
   run_action
 
   [ "$status" -eq 0 ]
-  assert_calls $'read-manifest\ndry-run\npackage\nmetadata\npublish'
+  assert_calls $'metadata\ndry-run\npackage\npublish'
   [ ! -s "$workdir/job summary" ]
 }
 

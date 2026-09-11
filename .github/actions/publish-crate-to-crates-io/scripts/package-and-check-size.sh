@@ -9,11 +9,8 @@ fi
 
 stage="Package"
 cargo package --locked --manifest-path "$MANIFEST_PATH"
-stage="Read package metadata"
-metadata=$(cargo metadata --no-deps --format-version 1 --manifest-path "$MANIFEST_PATH")
-target_directory=$(jq -er '.target_directory | strings | select(length > 0)' <<< "$metadata")
-crate_file="${target_directory}/package/${CRATE_NAME}-${CRATE_VERSION}.crate"
 stage="Check package size"
+crate_file="${TARGET_DIRECTORY}/package/${CRATE_NAME}-${CRATE_VERSION}.crate"
 size=$(stat --format=%s "$crate_file")
 echo "$CRATE_NAME package size: ${size} bytes"
 echo "size=$size" >> "$GITHUB_OUTPUT"
