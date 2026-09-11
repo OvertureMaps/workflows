@@ -25,10 +25,15 @@ than the schedule interval so a missed or delayed run doesn't drop issues.
 
 The default `GITHUB_TOKEN` is scoped to a single repo and can't read org
 membership or write labels in other repos. This action mints an installation
-token from a dedicated GitHub App, which needs:
+token from a GitHub App, which needs:
 
 - Organization permissions: Members read
 - Repository permissions: Issues write (on every repo it should label)
+
+This repo reuses the `overture-project-manager` App from
+`sync-project-status.yml` rather than standing up a new one, since it's
+already installed org-wide. That app's permission set needs Members (read)
+and Issues (write) added.
 
 ## How-to guides
 
@@ -63,17 +68,17 @@ jobs:
       - uses: aws-actions/configure-aws-credentials@v6
         with:
           aws-region: us-west-2
-          role-to-assume: arn:aws:iam::816069134238:role/gha-label-external-issues-secrets-reader
+          role-to-assume: arn:aws:iam::816069134238:role/gha-project-manager-secrets-reader
 
       - uses: aws-actions/aws-secretsmanager-get-secrets@v3
         with:
           secret-ids: |
-            LABEL_EXTERNAL_PEM, omf-github-terraform/label-external-issues/pem
+            PROJECT_MANAGER_PEM, omf-github-terraform/project-manager/pem
 
       - uses: ./.github/actions/label-external-issues
         with:
-          clientId: "<app-client-id>" # not sensitive
-          privateKey: ${{ env.LABEL_EXTERNAL_PEM }}
+          clientId: "Iv23limfwiJlCIqHPHrd" # overture-project-manager app, not sensitive
+          privateKey: ${{ env.PROJECT_MANAGER_PEM }}
           dryRun: ${{ inputs.dry_run || 'false' }}
 ```
 
@@ -84,20 +89,17 @@ Trigger the workflow manually with `dry_run` checked, or pass
 
 ### One-time setup required
 
-This action needs a dedicated GitHub App before it can run for real:
+This action reuses the `overture-project-manager` App, but that app doesn't
+have the right permissions yet:
 
-1. Create a GitHub App (or extend an existing internal one) with
-   **Organization: Members (read)** and **Repository: Issues (write)**
-   permissions, and install it on every repo that should be covered.
-2. Add the app's client ID, OIDC role, and Secrets Manager PEM entry in
-   `omf-github-terraform`, matching the naming convention this workflow
-   expects (`LABEL_EXTERNAL_APP_CLIENT_ID`, `gha-label-external-issues-secrets-reader`,
-   `omf-github-terraform/label-external-issues/pem`).
-3. Create the `external` label (or your chosen name) in each target repo,
+1. In `omf-github-terraform`, add **Organization: Members (read)** and
+   **Repository: Issues (write)** to the app's permission set (it's already
+   installed org-wide, so no new installation is needed).
+2. Create the `external` label (or your chosen name) in each target repo,
    or its default label templates, so the action can apply it.
 
-Until then, `label-external-issues.yml`'s placeholder client ID will cause
-runs to fail at the token-minting step.
+Until (1) is done, the token mints fine but membership checks and label
+writes will 403.
 
 ## Reference
 

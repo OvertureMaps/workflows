@@ -23,8 +23,9 @@ inputs:
     default: "false"
   clientId:
     description: >
-      GitHub App client ID used to generate an installation token with
-      org-level Members read and repository Issues write access. The
+      Client ID of a GitHub App installation token with org-level Members
+      read and repository Issues write access (this repo reuses
+      overture-project-manager, extended with those two permissions). The
       default GITHUB_TOKEN cannot read org membership or write issues in
       other repos.
     required: true
@@ -58,7 +59,7 @@ runs:
 
     - name: Generate GitHub App token
       id: app-token
-      uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0 # zizmor: ignore[github-app,ref-version-mismatch] -- dedicated app scoped to org-wide issue labeling
+      uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0 # zizmor: ignore[github-app,ref-version-mismatch] -- shared org-management app, permissions extended for org-wide issue labeling
       with:
         client-id: ${{ inputs.clientId }}
         private-key: ${{ inputs.privateKey }}
