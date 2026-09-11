@@ -1,6 +1,6 @@
 # Publish Cargo Crate to crates.io <!-- omit in toc -->
 
-A composite GitHub Action that dry-run publishes a Cargo crate, checks its packaged size against crates.io's 10MB cap, optionally verifies its version against a release tag, and (unless `dry-run-only`) publishes it for real using a short-lived crates.io Trusted Publishing (OIDC) token.
+A composite GitHub Action that dry-run publishes a Cargo crate, checks its packaged size against crates.io's 10MB cap, optionally verifies its version against a release tag, and (unless `dry-run-only`) publishes it using caller-provided Cargo credentials.
 
 - [How-to guides](#how-to-guides)
 - [Reference](#reference)
@@ -9,6 +9,9 @@ A composite GitHub Action that dry-run publishes a Cargo crate, checks its packa
 ## How-to guides
 
 ### Publish a crate on release
+
+The calling workflow owns authentication. This example uses crates.io Trusted
+Publishing and passes its short-lived token through `CARGO_REGISTRY_TOKEN`.
 
 ```yaml
 on:
@@ -25,8 +28,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Authenticate with crates.io
+        id: auth
+        uses: rust-lang/crates-io-auth-action@c6f97d42243bad5fab37ca0427f495c86d5b1a18 # v1.0.5
+
       - name: Publish my-crate
         uses: OvertureMaps/workflows/.github/actions/publish-crate-to-crates-io@main
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
         with:
           manifest-path: my-crate/Cargo.toml
           release-tag: ${{ github.event.release.tag_name }}
@@ -34,30 +43,43 @@ jobs:
 
 ### Publish multiple crates in dependency order
 
-Call the action once per crate, in the order your crates depend on each other:
+Call the action once per crate, in dependency order. The caller supplies
+credentials for each invocation:
 
 ```yaml
+- name: Authenticate for base crate
+  id: auth-base
+  uses: rust-lang/crates-io-auth-action@c6f97d42243bad5fab37ca0427f495c86d5b1a18 # v1.0.5
+
 - name: Publish base crate
   uses: OvertureMaps/workflows/.github/actions/publish-crate-to-crates-io@main
+  env:
+    CARGO_REGISTRY_TOKEN: ${{ steps.auth-base.outputs.token }}
   with:
     manifest-path: base-crate/Cargo.toml
     release-tag: ${{ github.event.release.tag_name }}
 
+- name: Authenticate for dependent crate
+  id: auth-dependent
+  uses: rust-lang/crates-io-auth-action@c6f97d42243bad5fab37ca0427f495c86d5b1a18 # v1.0.5
+
 - name: Publish dependent crate
   uses: OvertureMaps/workflows/.github/actions/publish-crate-to-crates-io@main
+  env:
+    CARGO_REGISTRY_TOKEN: ${{ steps.auth-dependent.outputs.token }}
   with:
     manifest-path: dependent-crate/Cargo.toml
     release-tag: ${{ github.event.release.tag_name }}
 ```
 
-Each call re-authenticates on its own: crates.io's Trusted Publishing docs don't confirm one OIDC token is valid for more than one crate, so this action mints a fresh token per invocation rather than sharing one across crates.
+This example authenticates before each crate. Credential scope and refresh
+remain the caller's responsibility.
 
 <details>
 <summary>Validate packaging on every push/PR, without publishing</summary>
 
 Set `dry-run-only: true` and drop `release-tag`. This needs no `environment`,
-no `id-token: write`, and no crates.io Trusted Publisher config, since it
-never authenticates:
+no `id-token: write`, and no credentials:
 
 ```yaml
 jobs:
@@ -87,7 +109,7 @@ jobs:
 - `manifest-path` (**required**): Path to the crate's `Cargo.toml`, relative to the repository root.
 - `release-tag` (optional): Git tag the release is cut from (e.g. `v1.2.3` or `1.2.3`). When set, the crate's `Cargo.toml` version must match it exactly (a leading `v` is stripped before comparing). Leave empty to skip the check, e.g. for a CI dry-run that has no release tag yet.
 - `max-crate-size-bytes` (optional): Maximum allowed packaged `.crate` size, in bytes. Default `10485760` (10MB, crates.io's upload cap).
-- `dry-run-only` (optional): When `"true"`, stops after the dry-run and size check: no crates.io authentication, no real `cargo publish`. Default `"false"`.
+- `dry-run-only` (optional): When `"true"`, stops after the dry-run and size check without publishing. No credentials needed. Default `"false"`.
 
 ### Outputs
 
@@ -97,20 +119,16 @@ jobs:
 
 ### Permissions
 
-For a real publish (`dry-run-only` unset or `"false"`):
-
-```yaml
-permissions:
-  contents: read
-  id-token: write
-```
-
-Plus a job-level `environment:` matching the crate's Trusted Publisher config on crates.io exactly (repo, workflow file name, and environment name are all part of that config). For `dry-run-only: true`, only `contents: read` is needed; no `environment` or `id-token: write`.
+This action doesn't request OIDC tokens or require a GitHub environment.
+The calling workflow sets permissions and any environment required by its
+authentication method. The Trusted Publishing example uses `id-token: write`
+and an environment matching the crate's Trusted Publisher configuration.
+Checkout needs `contents: read`.
 
 ### Requirements
 
 - `cargo` and `jq` on `PATH` (both preinstalled on GitHub-hosted `ubuntu-latest` runners).
-- A [crates.io Trusted Publisher configuration](https://crates.io/docs/trusted-publishing) for the crate, naming this repo, the calling workflow's file name, and the `environment` used, unless `dry-run-only: true`.
+- Caller-provided Cargo credentials for a real publish, such as `CARGO_REGISTRY_TOKEN` set through the calling step's `env`. No credentials are needed for `dry-run-only: true`.
 
 ## Explanation
 
@@ -124,19 +142,8 @@ with several crates (or several repos) get all three checks for free, called
 once per crate, instead of each repo re-deriving its own dry-run/size/version
 script.
 
-### Trusted Publishing, not a stored token
+### Consumer-owned authentication
 
-This action never takes a `CARGO_REGISTRY_TOKEN` input. It authenticates via
-[`rust-lang/crates-io-auth-action`](https://github.com/rust-lang/crates-io-auth-action),
-which exchanges the caller's GitHub Actions OIDC identity token for a
-short-lived crates.io token, scoped to whatever repo/workflow/environment
-combination the crate's Trusted Publisher config on crates.io names. There's
-no long-lived secret to store, rotate, or leak.
-
-### Per-crate re-authentication
-
-Each call to this action authenticates on its own before publishing. crates.io's
-docs describe a Trusted Publisher configuration as being registered per crate,
-but don't document whether a single minted token is valid across more than one
-crate in the same job. Re-authenticating per crate avoids relying on that
-undocumented behavior, at the cost of one extra OIDC round-trip per crate.
+The action uses Cargo's existing credential configuration without obtaining or
+overriding tokens. The caller chooses the authentication method and owns token
+scope, refresh, OIDC permissions, and environment configuration.
