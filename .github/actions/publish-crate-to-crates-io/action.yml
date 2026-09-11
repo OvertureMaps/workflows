@@ -33,80 +33,24 @@ inputs:
 outputs:
   crate-name:
     description: The crate's name, read from its Cargo.toml.
-    value: ${{ steps.manifest.outputs.name }}
+    value: ${{ steps.publish.outputs.name }}
   crate-version:
     description: The crate's version, read from its Cargo.toml.
-    value: ${{ steps.manifest.outputs.version }}
+    value: ${{ steps.publish.outputs.version }}
   crate-size-bytes:
     description: The packaged .crate file size, in bytes.
-    value: ${{ steps.package.outputs.size }}
+    value: ${{ steps.publish.outputs.size }}
 
 runs:
   using: composite
   steps:
-    - name: Read crate manifest
-      id: manifest
+    - name: Validate and publish crate
+      id: publish
       shell: bash
       env:
+        ACTION_PATH: ${{ github.action_path }}
         MANIFEST_PATH: ${{ inputs.manifest-path }}
-      run: |
-        set -euo pipefail
-        # cargo read-manifest (unlike cargo metadata) reads exactly the
-        # manifest passed in, not every member of its workspace.
-        name=$(cargo read-manifest --manifest-path "$MANIFEST_PATH" | jq -r '.name')
-        version=$(cargo read-manifest --manifest-path "$MANIFEST_PATH" | jq -r '.version')
-        echo "name=$name" >> "$GITHUB_OUTPUT"
-        echo "version=$version" >> "$GITHUB_OUTPUT"
-
-    - name: Verify version matches release tag
-      if: ${{ inputs.release-tag != '' }}
-      shell: bash
-      env:
         RELEASE_TAG: ${{ inputs.release-tag }}
-        CRATE_NAME: ${{ steps.manifest.outputs.name }}
-        CRATE_VERSION: ${{ steps.manifest.outputs.version }}
-      run: |
-        set -euo pipefail
-        expected="${RELEASE_TAG#v}"
-        if [ "$CRATE_VERSION" != "$expected" ]; then
-          echo "::error::$CRATE_NAME Cargo.toml version ($CRATE_VERSION) does not match release tag ($expected)"
-          exit 1
-        fi
-        echo "$CRATE_NAME version $CRATE_VERSION matches release tag"
-
-    - name: Dry-run publish
-      shell: bash
-      env:
-        MANIFEST_PATH: ${{ inputs.manifest-path }}
-      run: cargo publish --dry-run --locked --manifest-path "$MANIFEST_PATH"
-
-    - name: Package and check size
-      id: package
-      shell: bash
-      env:
-        MANIFEST_PATH: ${{ inputs.manifest-path }}
-        CRATE_NAME: ${{ steps.manifest.outputs.name }}
-        CRATE_VERSION: ${{ steps.manifest.outputs.version }}
         MAX_BYTES: ${{ inputs.max-crate-size-bytes }}
-      run: |
-        set -euo pipefail
-        cargo package --locked --manifest-path "$MANIFEST_PATH"
-
-        # cargo package always writes into <workspace_root>/target/package,
-        # regardless of which member's manifest was passed in.
-        workspace_root=$(cargo metadata --no-deps --format-version 1 --manifest-path "$MANIFEST_PATH" | jq -r '.workspace_root')
-        crate_file="${workspace_root}/target/package/${CRATE_NAME}-${CRATE_VERSION}.crate"
-        size=$(stat --format=%s "$crate_file")
-        echo "$CRATE_NAME package size: ${size} bytes"
-        echo "size=$size" >> "$GITHUB_OUTPUT"
-        if [ "$size" -gt "$MAX_BYTES" ]; then
-          echo "::error::$CRATE_NAME package is ${size} bytes, exceeding the ${MAX_BYTES}-byte limit"
-          exit 1
-        fi
-
-    - name: Publish
-      if: ${{ inputs.dry-run-only != 'true' }}
-      shell: bash
-      env:
-        MANIFEST_PATH: ${{ inputs.manifest-path }}
-      run: cargo publish --locked --manifest-path "$MANIFEST_PATH"
+        DRY_RUN_ONLY: ${{ inputs.dry-run-only }}
+      run: bash "$ACTION_PATH/scripts/publish-crate.sh"

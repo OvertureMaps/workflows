@@ -2,8 +2,12 @@
 
 A composite GitHub Action that dry-run publishes a Cargo crate, checks its packaged size against crates.io's 10MB cap, optionally verifies its version against a release tag, and (unless `dry-run-only`) publishes it using caller-provided Cargo credentials.
 
+This action targets crates.io Trusted Publishing only. It isn't a generic registry
+publisher.
+
 - [How-to guides](#how-to-guides)
 - [Reference](#reference)
+- [Testing](#testing)
 - [Explanation](#explanation)
 
 ## How-to guides
@@ -119,16 +123,32 @@ jobs:
 
 ### Permissions
 
-This action doesn't request OIDC tokens or require a GitHub environment.
-The calling workflow sets permissions and any environment required by its
-authentication method. The Trusted Publishing example uses `id-token: write`
-and an environment matching the crate's Trusted Publisher configuration.
+This action doesn't request OIDC tokens or configure a GitHub environment.
+The calling workflow grants `id-token: write` for crates.io Trusted Publishing
+and configures any environment required by the crate's Trusted Publisher settings.
 Checkout needs `contents: read`.
 
 ### Requirements
 
+- Bash and GNU `stat` (the action runs on Linux runners).
 - `cargo` and `jq` on `PATH` (both preinstalled on GitHub-hosted `ubuntu-latest` runners).
-- Caller-provided Cargo credentials for a real publish, such as `CARGO_REGISTRY_TOKEN` set through the calling step's `env`. No credentials are needed for `dry-run-only: true`.
+- For a real publish, the caller obtains a short-lived token through crates.io Trusted Publishing/OIDC and passes it as `CARGO_REGISTRY_TOKEN` through the calling step's `env`. No credentials are needed for `dry-run-only: true`.
+
+## Testing
+
+Run from the repository root with Bats 1.5.0 or later, Bash, `jq`, GNU `stat`,
+and GNU `truncate` on `PATH`:
+
+```bash
+bats .github/actions/publish-crate-to-crates-io/tests/
+```
+
+The tests execute the action's shell entrypoint with mocked Cargo commands and
+local fixtures. They cover release tags, size limits, paths with spaces, Cargo
+failures, outputs, and inherited credentials without network builds or publication.
+The path-filtered `test-publish-crate-to-crates-io.yml` workflow runs the same suite.
+Real Cargo builds, crates.io authentication, and publication need a consumer workflow
+test.
 
 ## Explanation
 
@@ -145,5 +165,11 @@ script.
 ### Consumer-owned authentication
 
 The action uses Cargo's existing credential configuration without obtaining or
-overriding tokens. The caller chooses the authentication method and owns token
-scope, refresh, OIDC permissions, and environment configuration.
+overriding tokens. The caller owns crates.io Trusted Publishing authentication,
+token scope and refresh, OIDC permissions, and environment configuration.
+The action doesn't validate token provenance.
+
+### Package location
+
+The size check reads `target_directory` from `cargo metadata`, so workspace
+members and custom target directories use Cargo's configured package location.
