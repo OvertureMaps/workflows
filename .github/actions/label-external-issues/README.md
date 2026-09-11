@@ -32,8 +32,8 @@ token from a GitHub App, which needs:
 
 This repo reuses the `overture-project-manager` App from
 `sync-project-status.yml` rather than standing up a new one, since it's
-already installed org-wide. That app's permission set needs Members (read)
-and Issues (write) added.
+already installed org-wide with Members (read) and Issues (write) added to
+its permission set.
 
 ## How-to guides
 
@@ -89,17 +89,10 @@ Trigger the workflow manually with `dry_run` checked, or pass
 
 ### One-time setup required
 
-This action reuses the `overture-project-manager` App, but that app doesn't
-have the right permissions yet:
-
-1. In `omf-github-terraform`, add **Organization: Members (read)** and
-   **Repository: Issues (write)** to the app's permission set (it's already
-   installed org-wide, so no new installation is needed).
-2. Create the `external` label (or your chosen name) in each target repo,
-   or its default label templates, so the action can apply it.
-
-Until (1) is done, the token mints fine but membership checks and label
-writes will 403.
+`overture-project-manager` already has **Organization: Members (read)** and
+**Repository: Issues (write)** added to its permission set. The only
+remaining step: create the `external` label (or your chosen name) in each
+target repo, or its default label templates, so the action can apply it.
 
 ## Reference
 

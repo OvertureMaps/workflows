@@ -7,10 +7,10 @@
 # lives in .github/actions/label-external-issues; see its README for details.
 #
 # Auth: reuses the overture-project-manager app from sync-project-status.yml,
-# which needs Organization Members (read) and Repository Issues (write)
-# added to its permission set. Assumes the same narrow OIDC role that can
-# only read the app's PEM from Secrets Manager. The role, secret, and app
-# are managed in omf-github-terraform.
+# with Organization Members (read) and Repository Issues (write) added to
+# its permission set. Assumes the same narrow OIDC role that can only read
+# the app's PEM from Secrets Manager. The role, secret, and app are managed
+# in omf-github-terraform.
 #
 name: Label External Issues
 
