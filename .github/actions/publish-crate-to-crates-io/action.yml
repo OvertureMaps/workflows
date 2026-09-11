@@ -1,0 +1,120 @@
+name: Publish Cargo Crate to crates.io
+description: >
+  Dry-run publishes a Cargo crate, checks its packaged .crate size against
+  crates.io's 10MB upload cap, optionally verifies its Cargo.toml version
+  against a release tag, and (unless dry-run-only) publishes it for real
+  using a short-lived crates.io Trusted Publishing (OIDC) token. Requires
+  `cargo`, `jq`, and (unless dry-run-only) a crates.io Trusted Publisher
+  configuration for this repo/workflow/environment already set up on
+  crates.io for the crate being published.
+
+inputs:
+  manifest-path:
+    description: Path to the crate's Cargo.toml, relative to the repository root.
+    required: true
+  release-tag:
+    description: >
+      Git tag the release is cut from (e.g. "v1.2.3" or "1.2.3"). When set,
+      the crate's Cargo.toml version must match it exactly (a leading "v" is
+      stripped before comparing). Leave empty to skip the check, e.g. for a
+      CI dry-run that has no release tag yet.
+    required: false
+    default: ""
+  max-crate-size-bytes:
+    description: Maximum allowed packaged .crate size, in bytes.
+    required: false
+    default: "10485760" # 10MB, crates.io's upload cap
+  dry-run-only:
+    description: >
+      When "true", stops after the dry-run and size check: no crates.io
+      authentication, no real `cargo publish`. Use this for a CI check that
+      validates packaging on every push/PR without publishing.
+    required: false
+    default: "false"
+
+outputs:
+  crate-name:
+    description: The crate's name, read from its Cargo.toml.
+    value: ${{ steps.manifest.outputs.name }}
+  crate-version:
+    description: The crate's version, read from its Cargo.toml.
+    value: ${{ steps.manifest.outputs.version }}
+  crate-size-bytes:
+    description: The packaged .crate file size, in bytes.
+    value: ${{ steps.package.outputs.size }}
+
+runs:
+  using: composite
+  steps:
+    - name: Read crate manifest
+      id: manifest
+      shell: bash
+      env:
+        MANIFEST_PATH: ${{ inputs.manifest-path }}
+      run: |
+        set -euo pipefail
+        # cargo read-manifest (unlike cargo metadata) reads exactly the
+        # manifest passed in, not every member of its workspace.
+        name=$(cargo read-manifest --manifest-path "$MANIFEST_PATH" | jq -r '.name')
+        version=$(cargo read-manifest --manifest-path "$MANIFEST_PATH" | jq -r '.version')
+        echo "name=$name" >> "$GITHUB_OUTPUT"
+        echo "version=$version" >> "$GITHUB_OUTPUT"
+
+    - name: Verify version matches release tag
+      if: ${{ inputs.release-tag != '' }}
+      shell: bash
+      env:
+        RELEASE_TAG: ${{ inputs.release-tag }}
+        CRATE_NAME: ${{ steps.manifest.outputs.name }}
+        CRATE_VERSION: ${{ steps.manifest.outputs.version }}
+      run: |
+        set -euo pipefail
+        expected="${RELEASE_TAG#v}"
+        if [ "$CRATE_VERSION" != "$expected" ]; then
+          echo "::error::$CRATE_NAME Cargo.toml version ($CRATE_VERSION) does not match release tag ($expected)"
+          exit 1
+        fi
+        echo "$CRATE_NAME version $CRATE_VERSION matches release tag"
+
+    - name: Dry-run publish
+      shell: bash
+      env:
+        MANIFEST_PATH: ${{ inputs.manifest-path }}
+      run: cargo publish --dry-run --locked --manifest-path "$MANIFEST_PATH"
+
+    - name: Package and check size
+      id: package
+      shell: bash
+      env:
+        MANIFEST_PATH: ${{ inputs.manifest-path }}
+        CRATE_NAME: ${{ steps.manifest.outputs.name }}
+        CRATE_VERSION: ${{ steps.manifest.outputs.version }}
+        MAX_BYTES: ${{ inputs.max-crate-size-bytes }}
+      run: |
+        set -euo pipefail
+        cargo package --locked --manifest-path "$MANIFEST_PATH"
+
+        # cargo package always writes into <workspace_root>/target/package,
+        # regardless of which member's manifest was passed in.
+        workspace_root=$(cargo metadata --no-deps --format-version 1 --manifest-path "$MANIFEST_PATH" | jq -r '.workspace_root')
+        crate_file="${workspace_root}/target/package/${CRATE_NAME}-${CRATE_VERSION}.crate"
+        size=$(stat --format=%s "$crate_file")
+        echo "$CRATE_NAME package size: ${size} bytes"
+        echo "size=$size" >> "$GITHUB_OUTPUT"
+        if [ "$size" -gt "$MAX_BYTES" ]; then
+          echo "::error::$CRATE_NAME package is ${size} bytes, exceeding the ${MAX_BYTES}-byte limit"
+          exit 1
+        fi
+
+    - name: Authenticate with crates.io
+      if: ${{ inputs.dry-run-only != 'true' }}
+      id: auth
+      uses: rust-lang/crates-io-auth-action@c6f97d42243bad5fab37ca0427f495c86d5b1a18 # v1.0.5
+
+    - name: Publish
+      if: ${{ inputs.dry-run-only != 'true' }}
+      shell: bash
+      env:
+        MANIFEST_PATH: ${{ inputs.manifest-path }}
+        CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
+      run: cargo publish --locked --manifest-path "$MANIFEST_PATH"
