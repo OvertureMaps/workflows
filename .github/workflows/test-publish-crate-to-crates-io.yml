@@ -1,0 +1,38 @@
+---
+name: Test publish-crate-to-crates-io
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/actions/publish-crate-to-crates-io/**"
+      - ".github/workflows/test-publish-crate-to-crates-io.yml"
+  pull_request:
+    paths:
+      - ".github/actions/publish-crate-to-crates-io/**"
+      - ".github/workflows/test-publish-crate-to-crates-io.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  bats:
+    name: bats unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install bats
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y bats
+
+      - name: Run bats tests
+        run: bats .github/actions/publish-crate-to-crates-io/tests/
