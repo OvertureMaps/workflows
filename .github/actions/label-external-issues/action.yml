@@ -76,11 +76,12 @@ runs:
         script: |
           const path = require('path');
           const run = require(path.join(process.env.GITHUB_ACTION_PATH, 'src', 'index.js'));
-          const lookbackMinutes = parseInt(process.env.LOOKBACK_MINUTES, 10);
-          if (!Number.isInteger(lookbackMinutes) || lookbackMinutes <= 0) {
-            core.setFailed(`lookbackMinutes must be a positive integer, got "${process.env.LOOKBACK_MINUTES}"`);
+          const rawLookbackMinutes = process.env.LOOKBACK_MINUTES;
+          if (!/^[1-9]\d*$/.test(rawLookbackMinutes)) {
+            core.setFailed(`lookbackMinutes must be a positive integer, got "${rawLookbackMinutes}"`);
             return;
           }
+          const lookbackMinutes = Number(rawLookbackMinutes);
           const sinceIso = new Date(Date.now() - lookbackMinutes * 60_000).toISOString();
           await run({
             github,

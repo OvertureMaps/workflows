@@ -16,7 +16,8 @@ label, and created within the lookback window, then for each one:
 - Skips it if the author is a bot (bots are never org members, so they'd
   otherwise always be mislabeled as external)
 - Checks org membership for the author
-- Adds the label if the author isn't a member; otherwise skips it
+- Adds the label if the author isn't a member; otherwise skips it, creating
+  the label in that repo first if it doesn't already exist
 
 The lookback window (default 180 minutes) should stay comfortably larger
 than the schedule interval so a missed or delayed run doesn't drop issues.
@@ -87,12 +88,12 @@ jobs:
 Trigger the workflow manually with `dry_run` checked, or pass
 `dryRun: "true"` to the action. Intended changes are logged but not applied.
 
-### One-time setup required
+### Setup
 
 `overture-project-manager` already has **Organization: Members (read)** and
-**Repository: Issues (write)** added to its permission set. The only
-remaining step: create the `external` label (or your chosen name) in each
-target repo, or its default label templates, so the action can apply it.
+**Repository: Issues (write)** added to its permission set, so no per-repo
+setup is required. The action creates the `external` label (or your chosen
+name) in a target repo the first time it needs to apply it there.
 
 ## Reference
 
