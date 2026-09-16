@@ -1,0 +1,44 @@
+---
+# Runs the bats unit tests for the publish-maven-to-codeartifact composite
+# action whenever its scripts, tests, or action.yml change.
+#
+# The action's mvn/JDK/JAR-resolution logic lives in scripts/*.sh precisely
+# so it can be exercised here without a real Maven build or CodeArtifact
+# credentials.
+name: Test publish-maven-to-codeartifact
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/actions/publish-maven-to-codeartifact/**"
+      - ".github/workflows/test-publish-maven-to-codeartifact.yml"
+  pull_request:
+    paths:
+      - ".github/actions/publish-maven-to-codeartifact/**"
+      - ".github/workflows/test-publish-maven-to-codeartifact.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  bats:
+    name: bats unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install bats
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y bats
+
+      - name: Run bats tests
+        run: bats .github/actions/publish-maven-to-codeartifact/tests/

@@ -1,0 +1,56 @@
+name: Publish Cargo Crate to crates.io
+description: >
+  Dry-run publishes a Cargo crate, checks its packaged .crate size against
+  crates.io's 10MB upload cap, optionally verifies its Cargo.toml version
+  against a release tag, and (unless dry-run-only) publishes it for real
+  using caller-provided Cargo credentials. Requires `cargo` and `jq`.
+  The calling workflow owns authentication.
+
+inputs:
+  manifest-path:
+    description: Path to the crate's Cargo.toml, relative to the repository root.
+    required: true
+  release-tag:
+    description: >
+      Git tag the release is cut from (e.g. "v1.2.3" or "1.2.3"). When set,
+      the crate's Cargo.toml version must match it exactly (a leading "v" is
+      stripped before comparing). Leave empty to skip the check, e.g. for a
+      CI dry-run that has no release tag yet.
+    required: false
+    default: ""
+  max-crate-size-bytes:
+    description: Maximum allowed packaged .crate size, in bytes.
+    required: false
+    default: "10485760" # 10MB, crates.io's upload cap
+  dry-run-only:
+    description: >
+      When "true", stops after the dry-run and size check: no real
+      `cargo publish`. Use this for a CI check that
+      validates packaging on every push/PR without publishing.
+    required: false
+    default: "false"
+
+outputs:
+  crate-name:
+    description: The crate's name, read from its Cargo.toml.
+    value: ${{ steps.publish.outputs.name }}
+  crate-version:
+    description: The crate's version, read from its Cargo.toml.
+    value: ${{ steps.publish.outputs.version }}
+  crate-size-bytes:
+    description: The packaged .crate file size, in bytes.
+    value: ${{ steps.publish.outputs.size }}
+
+runs:
+  using: composite
+  steps:
+    - name: Validate and publish crate
+      id: publish
+      shell: bash
+      env:
+        ACTION_PATH: ${{ github.action_path }}
+        MANIFEST_PATH: ${{ inputs.manifest-path }}
+        RELEASE_TAG: ${{ inputs.release-tag }}
+        MAX_BYTES: ${{ inputs.max-crate-size-bytes }}
+        DRY_RUN_ONLY: ${{ inputs.dry-run-only }}
+      run: bash "$ACTION_PATH/scripts/publish-crate.sh"

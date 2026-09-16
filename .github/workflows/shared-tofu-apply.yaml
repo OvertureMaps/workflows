@@ -144,7 +144,7 @@ jobs:
           path: ${{ inputs.artifact_path || '.' }}
 
       - name: Tofu Apply
-        uses: dflook/tofu-apply@981ee9b40c86a1450134ffa7994c2ae8878de302 # v3.0.0
+        uses: dflook/tofu-apply@ff7df1ab0935f2453085eb629dd098130c15e27c # v3.0.1
         with:
           label: ${{ inputs.tofu_plan_label || inputs.environment }}
           workspace: ${{ inputs.tofu_workspace || inputs.environment }}
