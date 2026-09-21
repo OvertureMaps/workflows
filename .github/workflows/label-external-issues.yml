@@ -65,7 +65,7 @@ jobs:
             PROJECT_MANAGER_PEM,${{ env.PROJECT_MANAGER_PEM_SECRET_ID }}
 
       - name: Label external issues
-        uses: ./.github/actions/label-external-issues
+        uses: $/.github/actions/label-external-issues
         with:
           clientId: ${{ env.PROJECT_MANAGER_APP_CLIENT_ID }}
           privateKey: ${{ env.PROJECT_MANAGER_PEM }}
