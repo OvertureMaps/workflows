@@ -1,0 +1,72 @@
+---
+# Labels issues opened by non-org-members across every OvertureMaps repo the
+# overture-project-manager GitHub App is installed on.
+#
+# Runs as a scheduled batch job (no per-repo `issues: opened` trigger needed)
+# using the search API, so adding it here covers all repos at once. Logic
+# lives in .github/actions/label-external-issues; see its README for details.
+#
+# Auth: reuses the overture-project-manager app from sync-project-status.yml,
+# with Organization Members (read) and Repository Issues (write) added to
+# its permission set. Assumes the same narrow OIDC role that can only read
+# the app's PEM from Secrets Manager. The role, secret, and app are managed
+# in omf-github-terraform.
+#
+name: Label External Issues
+
+on:
+  schedule:
+    - cron: "*/30 * * * *"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Log intended changes without applying them"
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: read # to check out the labeling action
+
+concurrency:
+  group: label-external-issues
+  cancel-in-progress: false
+
+jobs:
+  label:
+    name: Label issues from non-members
+    runs-on: ubuntu-slim
+    permissions:
+      contents: read
+      id-token: write # for OIDC authentication with AWS
+    env:
+      # Client ID of the org's overture-project-manager GitHub App (not sensitive).
+      PROJECT_MANAGER_APP_CLIENT_ID: "Iv23limfwiJlCIqHPHrd"
+      # Narrow OIDC role (omf-github-terraform oidc-aws.tf) that can only
+      # read the project-manager PEM secret.
+      PROJECT_MANAGER_OIDC_ROLE_ARN: arn:aws:iam::816069134238:role/gha-project-manager-secrets-reader
+      PROJECT_MANAGER_PEM_SECRET_ID: omf-github-terraform/project-manager/pem
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: .github/actions/label-external-issues
+
+      - uses: aws-actions/configure-aws-credentials@cbe3b392738ccf3f987d68400dafcf4b0624a56c # v6.2.4
+        with:
+          aws-region: us-west-2
+          role-to-assume: ${{ env.PROJECT_MANAGER_OIDC_ROLE_ARN }}
+
+      # Exports the PEM as env.PROJECT_MANAGER_PEM, masked (incl. multi-line).
+      - name: Fetch project-manager PEM from Secrets Manager
+        uses: aws-actions/aws-secretsmanager-get-secrets@2cb1a461cbd4865ac4299648312e4704c646cd53 # v3.0.1
+        with:
+          secret-ids: |
+            PROJECT_MANAGER_PEM,${{ env.PROJECT_MANAGER_PEM_SECRET_ID }}
+
+      - name: Label external issues
+        uses: $/.github/actions/label-external-issues
+        with:
+          clientId: ${{ env.PROJECT_MANAGER_APP_CLIENT_ID }}
+          privateKey: ${{ env.PROJECT_MANAGER_PEM }}
+          dryRun: ${{ inputs.dry_run || 'false' }}
