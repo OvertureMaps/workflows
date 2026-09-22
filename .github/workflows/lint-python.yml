@@ -53,7 +53,7 @@ jobs:
         env:
           BLACK_VERSION: ${{ inputs.black_version || '25.12.0' }}
 
-      - uses: reviewdog/action-black@9b4feb439b707a9b7673086795cc53e417a03abe # v3.23.0
+      - uses: reviewdog/action-black@5059d92f0326f09326be64e1c50693374c7771cb # v3.24.0
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           reporter: github-pr-check
