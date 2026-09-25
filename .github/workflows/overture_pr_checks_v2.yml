@@ -29,10 +29,9 @@ jobs:
   validate-pr-title:
     name: title
     permissions:
-      contents: none # no repository content access needed
+      contents: read # lfit's reuse-semantic-pull-request.yaml needs this for its PR-commits gate
       pull-requests: write # to post PR title validation comments
       issues: write # to post PR-related issue comments
-      statuses: write # to update commit status checks
     uses: OvertureMaps/workflows/.github/workflows/validate-pr-title-cc.yml@main # zizmor: ignore[unpinned-uses]
 
   check-linked-issue:

@@ -20,6 +20,11 @@
 # trigger is overture_pr_checks_v2.yml.
 #
 # Usage: Reference this workflow from any repo in the OvertureMaps organization.
+# Caller permission contract: since this workflow itself calls lfit's
+# reusable workflow, and a workflow_call chain can only narrow permissions
+# going deeper (never widen them), the calling job below MUST grant at
+# least `contents: read` and `pull-requests: read`, or lfit's PR-commits
+# gate will fail with a 403 before title validation even runs.
 #
 # Example (.github/workflows/pr-validation.yml):
 #   name: PR Title Validation
@@ -28,6 +33,9 @@
 #       types: [opened, reopened, edited, synchronize]
 #   jobs:
 #     validate-title:
+#       permissions:
+#         contents: read
+#         pull-requests: read
 #       uses: OvertureMaps/workflows/.github/workflows/validate-pr-title-cc.yml@main
 #
 name: Validate PR Title (Conventional Commits)
@@ -46,60 +54,58 @@ permissions:
 jobs:
   validate:
     name: Validate PR Title
+    permissions:
+      # Required by lfit's reusable workflow: it caps the token it runs with
+      # to whatever this caller job grants, and its gate step calls the
+      # GitHub API for PR commits/metadata.
+      contents: read
+      pull-requests: read # PR-commits/metadata lookups for the Dependabot title gate
+    uses: lfit/releng-reusable-workflows/.github/workflows/reuse-semantic-pull-request.yaml@87eacd1f8322263ebbc1411ce2ea82bab10ed091 # v0.10.3
+    with:
+      # Overture's Conventional Commits type vocabulary: the full commitizen
+      # default set (lowercase, matching our existing PR title convention;
+      # the upstream default is capitalized).
+      types: |
+        fix
+        feat
+        docs
+        style
+        refactor
+        test
+        chore
+        perf
+        build
+        ci
+        revert
+
+      # Overture doesn't police commit messages, only PR titles.
+      validate_single_commit: false
+
+  comment:
+    name: Post PR title validation comment
+    needs: validate
+    if: always()
     runs-on: ubuntu-latest
     permissions:
       contents: none # no repository content access needed
       pull-requests: write # to post PR title validation comments
       issues: write # to post PR-related issue comments via sticky comment action
-      statuses: write # to update commit status checks
     steps:
-      - uses: amannn/action-semantic-pull-request@48f256284bd46cdaab1048c3721360e808335d50 # v6.1.1
-        id: lint_pr_title
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          # No headerPattern override: the action's default already parses the
-          # standard Conventional Commits header (type(scope)!: subject).
-          requireScope: false
-          # Overture's Conventional Commits type vocabulary. Deliberately a
-          # subset of the commitizen defaults (no build/ci/revert/style) to
-          # match the concepts the legacy [TYPE] format covered.
-          types: |
-            fix
-            feat
-            docs
-            refactor
-            test
-            chore
-            perf
-
-          # Allow [WIP] prefix for draft work on repos without draft PR support.
-          wip: true
-
-          # Allow opt-out via labels, since some repos may have automated PRs that don't follow the new format.
-          ignoreLabels: |
-            bot
-            ignore-semantic-pull-request
-
       - name: Post validation failure comment
-        if: ${{ failure() && steps.lint_pr_title.outputs.error_message }}
+        if: ${{ needs.validate.result == 'failure' }}
         uses: marocchino/sticky-pull-request-comment@5770ad5eb8f42dd2c4f34da00c94c5381e49af88 # v3.0.5
         with:
-          # Distinct from validate-pr-title.yml's "pr-title-validation-error" header:
-          # this repo requires both workflows on its own PRs, and a shared header meant
-          # the legacy workflow's "delete on success" step would delete this comment
-          # out from under a genuinely failing CC check.
+          # needs.validate.result == 'failure' also covers infra failures inside
+          # lfit's workflow unrelated to the title itself (e.g. its Dependabot
+          # gate's GitHub API call erroring); the message below is worded to
+          # not overclaim it's always a bad title.
           header: pr-title-cc-validation-error
           message: |
             ## ❌ PR Title Validation Failed
 
-            **Error:** ${{ steps.lint_pr_title.outputs.error_message }}
-
-            ---
-
             This repo requires [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/) PR titles: `type(scope)!: description`, where `(scope)` is optional and `!` marks a breaking change.
 
-            **Allowed types:** `fix`, `feat`, `docs`, `refactor`, `test`, `chore`, `perf`
+            **Allowed types:** `fix`, `feat`, `docs`, `style`, `refactor`, `test`, `chore`, `perf`, `build`, `ci`, `revert`
 
             **Examples:**
             - `fix: Correct null pointer exception in geometry validator`
@@ -108,12 +114,14 @@ jobs:
 
             See the [Conventional Commits specification](https://www.conventionalcommits.org/en/v1.0.0/#specification) for the full grammar, or [why Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/#why-use-conventional-commits) for the rationale.
 
+            If your title already looks correct, this check may have failed for an unrelated reason — check the [run logs](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}).
+
             Fixed the title? This check won't pick up an edit automatically:
 
             [![Re-run this check](https://img.shields.io/badge/-Re--run%20this%20check-blue?style=for-the-badge)](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
 
       - name: Delete comment on success
-        if: ${{ success() }}
+        if: ${{ needs.validate.result == 'success' }}
         uses: marocchino/sticky-pull-request-comment@5770ad5eb8f42dd2c4f34da00c94c5381e49af88 # v3.0.5
         with:
           header: pr-title-cc-validation-error
