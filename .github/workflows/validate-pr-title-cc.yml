@@ -20,6 +20,11 @@
 # trigger is overture_pr_checks_v2.yml.
 #
 # Usage: Reference this workflow from any repo in the OvertureMaps organization.
+# Caller permission contract: since this workflow itself calls lfit's
+# reusable workflow, and a workflow_call chain can only narrow permissions
+# going deeper (never widen them), the calling job below MUST grant at
+# least `contents: read` and `pull-requests: read`, or lfit's PR-commits
+# gate will fail with a 403 before title validation even runs.
 #
 # Example (.github/workflows/pr-validation.yml):
 #   name: PR Title Validation
@@ -28,6 +33,9 @@
 #       types: [opened, reopened, edited, synchronize]
 #   jobs:
 #     validate-title:
+#       permissions:
+#         contents: read
+#         pull-requests: read
 #       uses: OvertureMaps/workflows/.github/workflows/validate-pr-title-cc.yml@main
 #
 name: Validate PR Title (Conventional Commits)
@@ -52,7 +60,7 @@ jobs:
       # GitHub API for PR commits/metadata.
       contents: read
       pull-requests: read # PR-commits/metadata lookups for the Dependabot title gate
-    uses: lfit/releng-reusable-workflows/.github/workflows/reuse-semantic-pull-request.yaml@6a5a5c7d2e939256b0425a4f440de7a51fc3b4c3 # v0.10.3
+    uses: lfit/releng-reusable-workflows/.github/workflows/reuse-semantic-pull-request.yaml@87eacd1f8322263ebbc1411ce2ea82bab10ed091 # v0.10.3
     with:
       # Overture's Conventional Commits type vocabulary: the full commitizen
       # default set (lowercase, matching our existing PR title convention;
@@ -87,10 +95,10 @@ jobs:
         if: ${{ needs.validate.result == 'failure' }}
         uses: marocchino/sticky-pull-request-comment@5770ad5eb8f42dd2c4f34da00c94c5381e49af88 # v3.0.5
         with:
-          # Distinct from validate-pr-title.yml's "pr-title-validation-error" header:
-          # this repo requires both workflows on its own PRs, and a shared header meant
-          # the legacy workflow's "delete on success" step would delete this comment
-          # out from under a genuinely failing CC check.
+          # needs.validate.result == 'failure' also covers infra failures inside
+          # lfit's workflow unrelated to the title itself (e.g. its Dependabot
+          # gate's GitHub API call erroring); the message below is worded to
+          # not overclaim it's always a bad title.
           header: pr-title-cc-validation-error
           message: |
             ## ❌ PR Title Validation Failed
@@ -105,6 +113,8 @@ jobs:
             - `refactor(schema)!: Drop support for legacy category format`
 
             See the [Conventional Commits specification](https://www.conventionalcommits.org/en/v1.0.0/#specification) for the full grammar, or [why Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/#why-use-conventional-commits) for the rationale.
+
+            If your title already looks correct, this check may have failed for an unrelated reason — check the [run logs](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}).
 
             Fixed the title? This check won't pick up an edit automatically:
 
