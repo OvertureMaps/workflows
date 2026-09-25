@@ -46,43 +46,42 @@ permissions:
 jobs:
   validate:
     name: Validate PR Title
+    permissions:
+      # Required by lfit's reusable workflow: it caps the token it runs with
+      # to whatever this caller job grants, and its gate step calls the
+      # GitHub API for PR commits/metadata.
+      contents: read
+      pull-requests: read # PR-commits/metadata lookups for the Dependabot title gate
+    uses: lfit/releng-reusable-workflows/.github/workflows/reuse-semantic-pull-request.yaml@6a5a5c7d2e939256b0425a4f440de7a51fc3b4c3 # v0.10.3
+    with:
+      # Overture's Conventional Commits type vocabulary: the full commitizen
+      # default set (lowercase, matching our existing PR title convention;
+      # the upstream default is capitalized).
+      types: |
+        fix
+        feat
+        docs
+        style
+        refactor
+        test
+        chore
+        perf
+        build
+        ci
+        revert
+
+  comment:
+    name: Post PR title validation comment
+    needs: validate
+    if: always()
     runs-on: ubuntu-latest
     permissions:
       contents: none # no repository content access needed
       pull-requests: write # to post PR title validation comments
       issues: write # to post PR-related issue comments via sticky comment action
-      statuses: write # to update commit status checks
     steps:
-      - uses: amannn/action-semantic-pull-request@48f256284bd46cdaab1048c3721360e808335d50 # v6.1.1
-        id: lint_pr_title
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          # No headerPattern override: the action's default already parses the
-          # standard Conventional Commits header (type(scope)!: subject).
-          requireScope: false
-          # Overture's Conventional Commits type vocabulary. Deliberately a
-          # subset of the commitizen defaults (no build/ci/revert/style) to
-          # match the concepts the legacy [TYPE] format covered.
-          types: |
-            fix
-            feat
-            docs
-            refactor
-            test
-            chore
-            perf
-
-          # Allow [WIP] prefix for draft work on repos without draft PR support.
-          wip: true
-
-          # Allow opt-out via labels, since some repos may have automated PRs that don't follow the new format.
-          ignoreLabels: |
-            bot
-            ignore-semantic-pull-request
-
       - name: Post validation failure comment
-        if: ${{ failure() && steps.lint_pr_title.outputs.error_message }}
+        if: ${{ needs.validate.result == 'failure' }}
         uses: marocchino/sticky-pull-request-comment@5770ad5eb8f42dd2c4f34da00c94c5381e49af88 # v3.0.5
         with:
           # Distinct from validate-pr-title.yml's "pr-title-validation-error" header:
@@ -93,13 +92,9 @@ jobs:
           message: |
             ## ❌ PR Title Validation Failed
 
-            **Error:** ${{ steps.lint_pr_title.outputs.error_message }}
-
-            ---
-
             This repo requires [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/) PR titles: `type(scope)!: description`, where `(scope)` is optional and `!` marks a breaking change.
 
-            **Allowed types:** `fix`, `feat`, `docs`, `refactor`, `test`, `chore`, `perf`
+            **Allowed types:** `fix`, `feat`, `docs`, `style`, `refactor`, `test`, `chore`, `perf`, `build`, `ci`, `revert`
 
             **Examples:**
             - `fix: Correct null pointer exception in geometry validator`
@@ -113,7 +108,7 @@ jobs:
             [![Re-run this check](https://img.shields.io/badge/-Re--run%20this%20check-blue?style=for-the-badge)](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
 
       - name: Delete comment on success
-        if: ${{ success() }}
+        if: ${{ needs.validate.result == 'success' }}
         uses: marocchino/sticky-pull-request-comment@5770ad5eb8f42dd2c4f34da00c94c5381e49af88 # v3.0.5
         with:
           header: pr-title-cc-validation-error
