@@ -70,6 +70,9 @@ jobs:
         ci
         revert
 
+      # Overture doesn't police commit messages, only PR titles.
+      validate_single_commit: false
+
   comment:
     name: Post PR title validation comment
     needs: validate
