@@ -20,7 +20,7 @@ updates:
     labels:
       - "bot"
     commit-message:
-      prefix: "[CHORE](gha)"
+      prefix: "chore"
       include: "scope"
     cooldown:
       default-days: 7
@@ -44,7 +44,7 @@ updates:
     labels:
       - "bot"
     commit-message:
-      prefix: "[CHORE](gha)"
+      prefix: "chore"
       include: "scope"
     cooldown:
       default-days: 7
