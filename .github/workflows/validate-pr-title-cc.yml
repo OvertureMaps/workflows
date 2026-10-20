@@ -60,7 +60,7 @@ jobs:
       # GitHub API for PR commits/metadata.
       contents: read
       pull-requests: read # PR-commits/metadata lookups for the Dependabot title gate
-    uses: lfit/releng-reusable-workflows/.github/workflows/reuse-semantic-pull-request.yaml@87eacd1f8322263ebbc1411ce2ea82bab10ed091 # v0.10.3
+    uses: lfit/releng-reusable-workflows/.github/workflows/reuse-semantic-pull-request.yaml@fb907909b12bbaf262de6b24fcafd181cabe6b24 # v0.10.4
     with:
       # Overture's Conventional Commits type vocabulary: the full commitizen
       # default set (lowercase, matching our existing PR title convention;
