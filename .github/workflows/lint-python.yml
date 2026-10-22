@@ -48,8 +48,17 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Install uv
+        uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with:
+          version: ">=0.13.4" # emSign root CA removal (GHSA-hq85-5cpj-mr62)
+          enable-cache: false
+
+      # reviewdog/action-black uses black from PATH, else falls back to system pip.
       - name: Install Black
-        run: pip install "black==${BLACK_VERSION}"
+        run: |
+          uv tool install "black==${BLACK_VERSION}"
+          uv tool dir --bin >> "$GITHUB_PATH"
         env:
           BLACK_VERSION: ${{ inputs.black_version || '25.12.0' }}
 

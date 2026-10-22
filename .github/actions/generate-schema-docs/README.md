@@ -91,7 +91,8 @@ This action performs no GitHub API calls and requires no `permissions` block.
 
 Python and uv do not need to be pre-installed — the action sets them up itself using
 `actions/setup-python` and `astral-sh/setup-uv`. The Python version is read from
-`.python-version` inside the schema repo.
+`.python-version` inside the schema repo. uv resolves to the latest release at or
+above 0.13.4, the first release without the distrusted emSign root CA.
 
 ## Explanation
 
