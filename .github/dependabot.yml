@@ -2,45 +2,21 @@
 version: 2
 updates:
 
-  # Maintain GitHub Actions dependencies
-  - package-ecosystem: "github-actions"
-    directory: "/"
-    schedule:
-      interval: "weekly"
-    open-pull-requests-limit: 5
-    groups:
-      actions:
-        patterns:
-          - "actions/*"
-          - "aws-actions/*"
-          - "github/*"
-      dflook:
-        patterns:
-          - "dflook/*"
-    labels:
-      - "bot"
-    commit-message:
-      prefix: "chore"
-      include: "scope"
-    cooldown:
-      default-days: 7
-
-  # Maintain composite action dependencies
+  # Maintain workflow and composite action dependencies
   - package-ecosystem: "github-actions"
     directories:
+      - "/"
       - "/.github/actions/*"
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 5
     groups:
-      actions:
+      gha-minor-patch:
         patterns:
-          - "actions/*"
-          - "aws-actions/*"
-          - "github/*"
-      dflook:
-        patterns:
-          - "dflook/*"
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
     labels:
       - "bot"
     commit-message:
