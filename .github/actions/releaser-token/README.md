@@ -1,6 +1,6 @@
 # Releaser app token <!-- omit in toc -->
 
-A composite GitHub Action that mints a short-lived installation token for the overture-releaser GitHub App: assume an IAM role via OIDC, fetch the app PEM from AWS Secrets Manager, create the token, then clear the PEM.
+A composite GitHub Action that mints a short-lived installation token for a GitHub App (defaults to overture-releaser; override inputs for any other app): assume an IAM role via OIDC, fetch the app PEM from AWS Secrets Manager, create the token, then clear the PEM.
 
 - [How-to guides](#how-to-guides)
 - [Reference](#reference)
@@ -26,6 +26,20 @@ jobs:
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
 ```
+
+### Use a different app
+
+```yaml
+- uses: OvertureMaps/workflows/.github/actions/releaser-token@<sha> # vX.Y.Z
+  with:
+    client-id: Iv23liexample
+    secret-id: path/to/other/pem
+    role-to-assume: arn:aws:iam::123456789012:role/other-reader
+    owner: OtherOrg
+    repositories: repo-a,repo-b
+```
+
+The PEM is always exposed internally as `RELEASER_APP_PEM`, regardless of app.
 
 ### Keep the PEM in the environment
 
@@ -56,6 +70,10 @@ A floating `@vN` tag is possible only with branch protection and release-only re
 | `secret-id` | `omf-github-terraform/releaser/pem` | Secrets Manager secret id |
 | `client-id` | `Iv23lijru2e660v1zJQO` | GitHub App client ID (not sensitive) |
 | `aws-region` | `us-west-2` | AWS region |
+| `owner` | current owner | Installation owner to scope the token to |
+| `repositories` | current repo | Repositories to scope the token to |
+| `owner` | current owner | Installation owner to scope the token to |
+| `repositories` | current repo | Repositories to scope the token to |
 
 | Output | Description |
 |--------|-------------|

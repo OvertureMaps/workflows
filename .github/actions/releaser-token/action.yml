@@ -1,8 +1,8 @@
 name: Releaser app token
 description: >
-  Mints a short-lived GitHub App installation token for the overture-releaser
-  app. Assumes an IAM role via OIDC, fetches the app PEM from AWS Secrets
-  Manager, creates the token with actions/create-github-app-token, then clears
+  Mints a short-lived GitHub App installation token. Defaults target the
+  overture-releaser app; override inputs to use any app. Assumes an IAM role via OIDC, fetches the
+  app PEM from AWS Secrets Manager, creates the token with actions/create-github-app-token, then clears
   the PEM from $GITHUB_ENV. Callers need `id-token: write` and `contents: read`.
 
 inputs:
@@ -25,13 +25,21 @@ inputs:
     required: false
     default: omf-github-terraform/releaser/pem
   client-id:
-    description: Client ID of the overture-releaser GitHub App (not sensitive)
+    description: Client ID of the GitHub App (not sensitive); default is overture-releaser
     required: false
     default: Iv23lijru2e660v1zJQO
   aws-region:
     description: AWS region of the Secrets Manager secret
     required: false
     default: us-west-2
+  owner:
+    description: Owner of the installation to scope the token to (default is the current repository owner)
+    required: false
+    default: ""
+  repositories:
+    description: Comma or newline-separated repositories to scope the token to (default is the current repository)
+    required: false
+    default: ""
 
 outputs:
   token:
@@ -60,6 +68,8 @@ runs:
       with:
         client-id: ${{ inputs.client-id }}
         private-key: ${{ env.RELEASER_APP_PEM }} # zizmor: ignore[secrets-outside-env]
+        owner: ${{ inputs.owner }}
+        repositories: ${{ inputs.repositories }}
         permission-contents: ${{ inputs.permission-contents }}
 
     - name: Clear releaser PEM
