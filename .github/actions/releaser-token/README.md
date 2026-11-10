@@ -41,6 +41,17 @@ jobs:
 
 The PEM is exposed to later steps as `APP_PEM` until cleared.
 
+### Use an app key stored as a GitHub secret
+
+```yaml
+- uses: OvertureMaps/workflows/.github/actions/releaser-token@<sha> # vX.Y.Z
+  with:
+    client-id: Iv23liiN80WEARreTV7m
+    private-key: ${{ secrets.OVERTURE_PULL_REQUESTER_APP_PEM }} # zizmor: ignore[secrets-outside-env]
+```
+
+No AWS role or `id-token: write` is needed in this mode. `client-id` replaces the deprecated numeric `app-id`.
+
 ### Keep the PEM in the environment
 
 Set `clear-pem: "false"` to leave `APP_PEM` in `$GITHUB_ENV`.
@@ -70,6 +81,7 @@ A floating `@vN` tag is possible only with branch protection and release-only re
 | `secret-id` | `omf-github-terraform/releaser/pem` | Secrets Manager secret id |
 | `client-id` | `Iv23lijru2e660v1zJQO` | GitHub App client ID (not sensitive) |
 | `aws-region` | `us-west-2` | AWS region |
+| `private-key` | _(empty)_ | App private key passed directly (e.g. from a GitHub secret); skips the AWS and Secrets Manager steps |
 | `owner` | current owner | Installation owner to scope the token to |
 | `repositories` | current repo | Repositories to scope the token to |
 | `permission-pull-requests` | _(omitted)_ | Permission level for `pull-requests` |

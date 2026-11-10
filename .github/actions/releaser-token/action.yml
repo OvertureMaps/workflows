@@ -54,6 +54,12 @@ inputs:
     description: AWS region of the Secrets Manager secret
     required: false
     default: us-west-2
+  private-key:
+    description: >
+      App private key supplied directly (e.g. from a GitHub secret). When set,
+      the AWS role assumption and Secrets Manager fetch are skipped.
+    required: false
+    default: ""
   owner:
     description: Owner of the installation to scope the token to (default is the current repository owner)
     required: false
@@ -72,6 +78,7 @@ runs:
   using: composite
   steps:
     - name: Configure AWS credentials
+      if: inputs.private-key == ''
       uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
       with:
         aws-region: ${{ inputs.aws-region }}
@@ -79,6 +86,7 @@ runs:
         role-session-name: GitHubActions_${{ github.job }}_${{ github.run_id }}
 
     - name: Fetch releaser PEM from Secrets Manager
+      if: inputs.private-key == ''
       uses: aws-actions/aws-secretsmanager-get-secrets@2297f9a879480a9e3af9b293ed15c70caf8e1c88 # v3.0.2
       with:
         secret-ids: |
@@ -89,7 +97,7 @@ runs:
       uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
       with:
         client-id: ${{ inputs.client-id }}
-        private-key: ${{ env.APP_PEM }} # zizmor: ignore[secrets-outside-env]
+        private-key: ${{ inputs.private-key || env.APP_PEM }} # zizmor: ignore[secrets-outside-env]
         owner: ${{ inputs.owner }}
         repositories: ${{ inputs.repositories }}
         permission-contents: ${{ inputs.permission-contents }}
