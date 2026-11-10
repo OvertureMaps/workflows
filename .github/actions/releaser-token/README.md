@@ -72,8 +72,13 @@ A floating `@vN` tag is possible only with branch protection and release-only re
 | `aws-region` | `us-west-2` | AWS region |
 | `owner` | current owner | Installation owner to scope the token to |
 | `repositories` | current repo | Repositories to scope the token to |
-| `owner` | current owner | Installation owner to scope the token to |
-| `repositories` | current repo | Repositories to scope the token to |
+| `permission-pull-requests` | _(omitted)_ | Permission level for `pull-requests` |
+| `permission-workflows` | _(omitted)_ | Permission level for `workflows` |
+| `permission-actions` | _(omitted)_ | Permission level for `actions` |
+| `permission-issues` | _(omitted)_ | Permission level for `issues` |
+| `clear-aws-credentials` | `false` | Also clear `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` and `AWS_SESSION_TOKEN` (runs on failure too) |
+
+Pass `permission-contents: ""` to omit the `contents` scope. Omitted scopes are not requested, so the token gets only what is listed.
 
 | Output | Description |
 |--------|-------------|
@@ -83,4 +88,4 @@ Caller permissions required: `id-token: write`, `contents: read`.
 
 ## Explanation
 
-Composite actions cannot grant permissions, so the calling job must declare them. The PEM is exported by `aws-secretsmanager-get-secrets` to `$GITHUB_ENV`; the final step blanks it with `if: always()` so a failed token step does not leave it for later steps. AWS credentials exported by `configure-aws-credentials` are not cleared. The `secrets-outside-env` zizmor suppression is justified once here: the PEM is intentionally read from the environment.
+Composite actions cannot grant permissions, so the calling job must declare them. The PEM is exported by `aws-secretsmanager-get-secrets` to `$GITHUB_ENV`; the final step blanks it with `if: always()` so a failed token step does not leave it for later steps. AWS credentials exported by `configure-aws-credentials` stay in the job unless `clear-aws-credentials` is `true`. The `secrets-outside-env` zizmor suppression is justified once here: the PEM is intentionally read from the environment.

@@ -10,7 +10,29 @@ inputs:
     description: Permission level requested for the token's `contents` scope
     required: false
     default: write
-  clear-pem:
+  permission-pull-requests:
+    description: Permission level for the token's `pull-requests` scope (empty to omit)
+    required: false
+    default: ""
+  permission-workflows:
+    description: Permission level for the token's `workflows` scope (empty to omit)
+    required: false
+    default: ""
+  permission-actions:
+    description: Permission level for the token's `actions` scope (empty to omit)
+    required: false
+    default: ""
+  permission-issues:
+    description: Permission level for the token's `issues` scope (empty to omit)
+    required: false
+    default: ""
+  clear-aws-credentials:
+    description: >
+      Also clear the AWS credentials exported by the role assumption from
+      $GITHUB_ENV, including when the token step fails. Set to "true" when later
+      steps run third-party code that should not hold them.
+    required: false
+    default: "false"  clear-pem:
     description: >
       Clear APP_PEM from $GITHUB_ENV after the token step, including
       when it fails. Set to "false" to leave it untouched.
@@ -71,8 +93,22 @@ runs:
         owner: ${{ inputs.owner }}
         repositories: ${{ inputs.repositories }}
         permission-contents: ${{ inputs.permission-contents }}
+        permission-pull-requests: ${{ inputs.permission-pull-requests }}
+        permission-workflows: ${{ inputs.permission-workflows }}
+        permission-actions: ${{ inputs.permission-actions }}
+        permission-issues: ${{ inputs.permission-issues }}
 
     - name: Clear releaser PEM
       if: always() && inputs.clear-pem == 'true'
       shell: bash
       run: echo "APP_PEM=" >> "$GITHUB_ENV"
+
+    - name: Clear AWS credentials
+      if: always() && inputs.clear-aws-credentials == 'true'
+      shell: bash
+      run: |
+        {
+          echo "AWS_ACCESS_KEY_ID="
+          echo "AWS_SECRET_ACCESS_KEY="
+          echo "AWS_SESSION_TOKEN="
+        } >> "$GITHUB_ENV"
