@@ -49,7 +49,7 @@ jobs:
           persist-credentials: false
 
       - name: Install uv
-        uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
+        uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
         with:
           version: ">=0.13.4" # emSign root CA removal (GHSA-hq85-5cpj-mr62)
           enable-cache: false
@@ -62,7 +62,7 @@ jobs:
         env:
           BLACK_VERSION: ${{ inputs.black_version || '25.12.0' }}
 
-      - uses: reviewdog/action-black@5059d92f0326f09326be64e1c50693374c7771cb # v3.24.0
+      - uses: reviewdog/action-black@7e1c3d9c6a3e7e9d202055c0d79deba392255c0c # v3.25.0
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           reporter: github-pr-check
