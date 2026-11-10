@@ -59,7 +59,7 @@ inputs:
     required: false
     default: ""
   repositories:
-    description: Comma or newline-separated repositories to scope the token to (default is the current repository)
+    description: Comma or newline-separated repositories to scope the token to (default is the current repository, even when `owner` is set)
     required: false
     default: ""
 
@@ -91,7 +91,7 @@ runs:
         client-id: ${{ inputs.client-id }}
         private-key: ${{ env.APP_PEM }} # zizmor: ignore[secrets-outside-env]
         owner: ${{ inputs.owner }}
-        repositories: ${{ inputs.repositories }}
+        repositories: ${{ inputs.repositories || github.event.repository.name }}
         permission-contents: ${{ inputs.permission-contents }}
         permission-pull-requests: ${{ inputs.permission-pull-requests }}
         permission-workflows: ${{ inputs.permission-workflows }}
