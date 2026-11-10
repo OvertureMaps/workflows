@@ -1,0 +1,68 @@
+name: Releaser app token
+description: >
+  Mints a short-lived GitHub App installation token for the overture-releaser
+  app. Assumes an IAM role via OIDC, fetches the app PEM from AWS Secrets
+  Manager, creates the token with actions/create-github-app-token, then clears
+  the PEM from $GITHUB_ENV. Callers need `id-token: write` and `contents: read`.
+
+inputs:
+  permission-contents:
+    description: Permission level requested for the token's `contents` scope
+    required: false
+    default: write
+  clear-pem:
+    description: >
+      Clear RELEASER_APP_PEM from $GITHUB_ENV after the token step, including
+      when it fails. Set to "false" to leave it untouched.
+    required: false
+    default: "true"
+  role-to-assume:
+    description: IAM role ARN allowed to read the PEM secret
+    required: false
+    default: arn:aws:iam::816069134238:role/gha-releaser-secrets-reader
+  secret-id:
+    description: Secrets Manager secret id holding the app PEM
+    required: false
+    default: omf-github-terraform/releaser/pem
+  client-id:
+    description: Client ID of the overture-releaser GitHub App (not sensitive)
+    required: false
+    default: Iv23lijru2e660v1zJQO
+  aws-region:
+    description: AWS region of the Secrets Manager secret
+    required: false
+    default: us-west-2
+
+outputs:
+  token:
+    description: GitHub App installation token
+    value: ${{ steps.app-token.outputs.token }}
+
+runs:
+  using: composite
+  steps:
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+      with:
+        aws-region: ${{ inputs.aws-region }}
+        role-to-assume: ${{ inputs.role-to-assume }}
+        role-session-name: GitHubActions_${{ github.job }}_${{ github.run_id }}
+
+    - name: Fetch releaser PEM from Secrets Manager
+      uses: aws-actions/aws-secretsmanager-get-secrets@2297f9a879480a9e3af9b293ed15c70caf8e1c88 # v3.0.2
+      with:
+        secret-ids: |
+          RELEASER_APP_PEM, ${{ inputs.secret-id }}
+
+    - name: Generate app token
+      id: app-token
+      uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+      with:
+        client-id: ${{ inputs.client-id }}
+        private-key: ${{ env.RELEASER_APP_PEM }} # zizmor: ignore[secrets-outside-env]
+        permission-contents: ${{ inputs.permission-contents }}
+
+    - name: Clear releaser PEM
+      if: always() && inputs.clear-pem == 'true'
+      shell: bash
+      run: echo "RELEASER_APP_PEM=" >> "$GITHUB_ENV"

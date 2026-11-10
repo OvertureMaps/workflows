@@ -1,0 +1,54 @@
+---
+# Cuts an immutable semver tag and GitHub release on every merge to main so
+# Dependabot can propose version bumps to consumers of this repo's actions.
+# Bump rule from commit subjects since the last tag: "!" or BREAKING CHANGE
+# -> major, "feat" -> minor, anything else -> patch.
+name: Release
+
+on:
+  push:
+    branches: [main]
+
+permissions: {}
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Tag and release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # create tag and release
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Compute next version
+        id: version
+        run: |
+          last=$(git tag --list 'v[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname | head -n1)
+          if [ -z "$last" ]; then
+            echo "next=v1.0.0" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          log=$(git log "${last}..HEAD" --format='%s%n%b')
+          IFS=. read -r major minor patch <<< "${last#v}"
+          if grep -qE '^[a-z]+(\([^)]*\))?!:|^BREAKING CHANGE' <<< "$log"; then
+            major=$((major + 1)); minor=0; patch=0
+          elif grep -qE '^feat(\([^)]*\))?:' <<< "$log"; then
+            minor=$((minor + 1)); patch=0
+          else
+            patch=$((patch + 1))
+          fi
+          echo "next=v${major}.${minor}.${patch}" >> "$GITHUB_OUTPUT"
+
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.next }}
+        run: gh release create "$VERSION" --target "$GITHUB_SHA" --generate-notes --repo "$GITHUB_REPOSITORY"
