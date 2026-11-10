@@ -12,7 +12,7 @@ inputs:
     default: write
   clear-pem:
     description: >
-      Clear RELEASER_APP_PEM from $GITHUB_ENV after the token step, including
+      Clear APP_PEM from $GITHUB_ENV after the token step, including
       when it fails. Set to "false" to leave it untouched.
     required: false
     default: "true"
@@ -60,14 +60,14 @@ runs:
       uses: aws-actions/aws-secretsmanager-get-secrets@2297f9a879480a9e3af9b293ed15c70caf8e1c88 # v3.0.2
       with:
         secret-ids: |
-          RELEASER_APP_PEM, ${{ inputs.secret-id }}
+          APP_PEM, ${{ inputs.secret-id }}
 
     - name: Generate app token
       id: app-token
       uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
       with:
         client-id: ${{ inputs.client-id }}
-        private-key: ${{ env.RELEASER_APP_PEM }} # zizmor: ignore[secrets-outside-env]
+        private-key: ${{ env.APP_PEM }} # zizmor: ignore[secrets-outside-env]
         owner: ${{ inputs.owner }}
         repositories: ${{ inputs.repositories }}
         permission-contents: ${{ inputs.permission-contents }}
@@ -75,4 +75,4 @@ runs:
     - name: Clear releaser PEM
       if: always() && inputs.clear-pem == 'true'
       shell: bash
-      run: echo "RELEASER_APP_PEM=" >> "$GITHUB_ENV"
+      run: echo "APP_PEM=" >> "$GITHUB_ENV"

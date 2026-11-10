@@ -39,11 +39,11 @@ jobs:
     repositories: repo-a,repo-b
 ```
 
-The PEM is always exposed internally as `RELEASER_APP_PEM`, regardless of app.
+The PEM is exposed to later steps as `APP_PEM` until cleared.
 
 ### Keep the PEM in the environment
 
-Set `clear-pem: "false"` to leave `RELEASER_APP_PEM` in `$GITHUB_ENV`.
+Set `clear-pem: "false"` to leave `APP_PEM` in `$GITHUB_ENV`.
 
 ### Receive updates via Dependabot
 
@@ -65,7 +65,7 @@ A floating `@vN` tag is possible only with branch protection and release-only re
 | Input | Default | Description |
 |-------|---------|-------------|
 | `permission-contents` | `write` | Permission level for the token's `contents` scope |
-| `clear-pem` | `true` | Clear `RELEASER_APP_PEM` after the token step (runs on failure too) |
+| `clear-pem` | `true` | Clear `APP_PEM` after the token step (runs on failure too) |
 | `role-to-assume` | `arn:aws:iam::816069134238:role/gha-releaser-secrets-reader` | IAM role used to read the secret |
 | `secret-id` | `omf-github-terraform/releaser/pem` | Secrets Manager secret id |
 | `client-id` | `Iv23lijru2e660v1zJQO` | GitHub App client ID (not sensitive) |
