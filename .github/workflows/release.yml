@@ -2,8 +2,8 @@
 # Cuts an immutable semver tag and GitHub release on every merge to main so
 # Dependabot can propose version bumps to consumers of this repo's actions.
 # Next version is derived from conventional commits by semantic-release
-# (see .releaserc.json; chore/ci/build/refactor also cut a patch so Dependabot
-# pin bumps are released).
+# (see .github/release/releaserc.json; chore/ci/build/refactor also cut a
+# patch so Dependabot pin bumps are released).
 name: Release
 
 on:
@@ -34,13 +34,11 @@ jobs:
         with:
           node-version: 24
 
+      - name: Install release tooling
+        working-directory: .github/release
+        run: npm ci --ignore-scripts
+
       - name: Semantic release
         env:
           GITHUB_TOKEN: ${{ github.token }}
-        # semantic-release only reads config from the repo root, so stage it there
-        run: |
-          cp .github/releaserc.json .releaserc.json
-          npx --yes \
-            --package semantic-release@25.0.9 \
-            --package conventional-changelog-conventionalcommits@10.4.1 \
-            semantic-release
+        run: .github/release/node_modules/.bin/semantic-release --extends ./.github/release/releaserc.json
