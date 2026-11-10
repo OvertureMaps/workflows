@@ -89,7 +89,7 @@ A floating `@vN` tag is possible only with branch protection and release-only re
 | `permission-issues` | _(omitted)_ | Permission level for `issues` |
 | `clear-aws-credentials` | `false` | Also clear `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` and `AWS_SESSION_TOKEN` (runs on failure too) |
 
-Pass `permission-contents: ""` to omit the `contents` scope. Omitted scopes are not requested, so the token gets only what is listed.
+Pass `permission-contents: ""` to omit the `contents` scope, but set at least one other `permission-*` input: the action fails if none is set, because an empty set would grant the token every permission of the app installation.
 
 | Output | Description |
 |--------|-------------|

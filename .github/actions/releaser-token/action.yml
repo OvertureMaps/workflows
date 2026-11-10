@@ -32,7 +32,8 @@ inputs:
       $GITHUB_ENV, including when the token step fails. Set to "true" when later
       steps run third-party code that should not hold them.
     required: false
-    default: "false"  clear-pem:
+    default: "false"
+  clear-pem:
     description: >
       Clear APP_PEM from $GITHUB_ENV after the token step, including
       when it fails. Set to "false" to leave it untouched.
@@ -71,6 +72,16 @@ outputs:
 runs:
   using: composite
   steps:
+    - name: Require at least one permission
+      shell: bash
+      env:
+        PERMISSIONS: ${{ inputs.permission-contents }}${{ inputs.permission-pull-requests }}${{ inputs.permission-workflows }}${{ inputs.permission-actions }}${{ inputs.permission-issues }}
+      run: |
+        if [ -z "$PERMISSIONS" ]; then
+          echo "::error::Set at least one permission-* input; an empty set would grant the token every permission of the app installation."
+          exit 1
+        fi
+
     - name: Configure AWS credentials
       uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
       with:
