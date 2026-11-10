@@ -82,7 +82,7 @@ A floating `@vN` tag is possible only with branch protection and release-only re
 | `client-id` | `Iv23lijru2e660v1zJQO` | GitHub App client ID (not sensitive) |
 | `aws-region` | `us-west-2` | AWS region |
 | `owner` | current owner | Installation owner to scope the token to |
-| `repositories` | current repo | Repositories to scope the token to (current repo even when `owner` is set; set it explicitly for another owner) |
+| `repositories` | current repo | Comma or newline-separated repositories to scope the token to (current repo even when `owner` is set; set it explicitly for another owner). A non-empty value with no repository names fails the action |
 | `permission-pull-requests` | _(omitted)_ | Permission level for `pull-requests` |
 | `permission-workflows` | _(omitted)_ | Permission level for `workflows` |
 | `permission-actions` | _(omitted)_ | Permission level for `actions` |

@@ -72,16 +72,26 @@ outputs:
 runs:
   using: composite
   steps:
-    - name: Require at least one permission
+    - name: Validate inputs
+      id: validate
       shell: bash
       env:
         PERMISSIONS: ${{ inputs.permission-contents }}${{ inputs.permission-pull-requests }}${{ inputs.permission-workflows }}${{ inputs.permission-actions }}${{ inputs.permission-issues }}
+        REPOSITORIES: ${{ inputs.repositories }}
       run: |
         if [ -z "$PERMISSIONS" ]; then
           echo "::error::Set at least one permission-* input; an empty set would grant the token every permission of the app installation."
           exit 1
         fi
-
+        repos=$(tr -s ',[:space:]' '\n' <<< "$REPOSITORIES" | sed '/^$/d' | paste -sd, -)
+        if [ -z "$repos" ]; then
+          if [ -n "${REPOSITORIES//[[:space:]]/}" ]; then
+            echo "::error::The repositories input contains no repository names; an empty list would grant access to every repository in the installation."
+            exit 1
+          fi
+          repos="${GITHUB_REPOSITORY#*/}"
+        fi
+        echo "repositories=$repos" >> "$GITHUB_OUTPUT"
     - name: Configure AWS credentials
       uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
       with:
@@ -102,7 +112,7 @@ runs:
         client-id: ${{ inputs.client-id }}
         private-key: ${{ env.APP_PEM }} # zizmor: ignore[secrets-outside-env]
         owner: ${{ inputs.owner }}
-        repositories: ${{ inputs.repositories || github.event.repository.name }}
+        repositories: ${{ steps.validate.outputs.repositories }}
         permission-contents: ${{ inputs.permission-contents }}
         permission-pull-requests: ${{ inputs.permission-pull-requests }}
         permission-workflows: ${{ inputs.permission-workflows }}
