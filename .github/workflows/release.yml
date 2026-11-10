@@ -1,8 +1,9 @@
 ---
 # Cuts an immutable semver tag and GitHub release on every merge to main so
 # Dependabot can propose version bumps to consumers of this repo's actions.
-# Bump rule from commit subjects since the last tag: "!" or BREAKING CHANGE
-# -> major, "feat" -> minor, anything else -> patch.
+# Next version is derived from conventional commits by semantic-release
+# (see .releaserc.json; chore/ci/build/refactor also cut a patch so Dependabot
+# pin bumps are released).
 name: Release
 
 on:
@@ -28,27 +29,18 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
-      - name: Compute next version
-        id: version
-        run: |
-          last=$(git tag --list 'v[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname | head -n1)
-          if [ -z "$last" ]; then
-            echo "next=v1.0.0" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          log=$(git log "${last}..HEAD" --format='%s%n%b')
-          IFS=. read -r major minor patch <<< "${last#v}"
-          if grep -qE '^[a-z]+(\([^)]*\))?!:|^BREAKING CHANGE' <<< "$log"; then
-            major=$((major + 1)); minor=0; patch=0
-          elif grep -qE '^feat(\([^)]*\))?:' <<< "$log"; then
-            minor=$((minor + 1)); patch=0
-          else
-            patch=$((patch + 1))
-          fi
-          echo "next=v${major}.${minor}.${patch}" >> "$GITHUB_OUTPUT"
+      - name: Setup Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
 
-      - name: Create release
+      - name: Semantic release
         env:
-          GH_TOKEN: ${{ github.token }}
-          VERSION: ${{ steps.version.outputs.next }}
-        run: gh release create "$VERSION" --target "$GITHUB_SHA" --generate-notes --repo "$GITHUB_REPOSITORY"
+          GITHUB_TOKEN: ${{ github.token }}
+        # semantic-release only reads config from the repo root, so stage it there
+        run: |
+          cp .github/releaserc.json .releaserc.json
+          npx --yes \
+            --package semantic-release@25.0.9 \
+            --package conventional-changelog-conventionalcommits@10.4.1 \
+            semantic-release
