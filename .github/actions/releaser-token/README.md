@@ -41,6 +41,17 @@ jobs:
 
 The PEM is exposed to later steps as `APP_PEM` until cleared.
 
+### Migrate a consumer
+
+1. Confirm the repo is in the matching `*_secrets_reader_repos` list in `omf-github-terraform` `oidc-aws.tf`.
+2. Replace the inline AWS credentials, Secrets Manager and `create-github-app-token` steps with this action, pinned `@<sha> # vX.Y.Z`, with `id-token: write` and `contents: read` on the job.
+3. After the first successful run on the default branch, manually delete the GitHub Actions secrets this replaces so a stale PEM is not left lying around:
+   - Repo-level: Settings > Secrets and variables > Actions, or `gh secret delete <NAME> --repo OvertureMaps/<repo>`.
+   - Org-level: remove the repo from the secret's selected repositories, or delete the secret once no repo uses it (`gh secret delete <NAME> --org OvertureMaps`).
+   - Dependabot-scoped copies too: add `--app dependabot`.
+
+   Known candidates: `OVERTURE_PULL_REQUESTER_APP_PEM` (`schema`, `tf-data-platform`) and `OVERTURE_TF_DATA_PLATFORM_GH_AUTOMATION_APP_PEM` (`overture-matchers`).
+
 ### Keep the PEM in the environment
 
 Set `clear-pem: "false"` to leave `APP_PEM` in `$GITHUB_ENV`.
