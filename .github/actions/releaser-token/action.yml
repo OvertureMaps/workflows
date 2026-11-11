@@ -26,6 +26,10 @@ inputs:
     description: Permission level for the token's `issues` scope (empty to omit)
     required: false
     default: ""
+  permission-dependabot-secrets:
+    description: Permission level for the token's `dependabot_secrets` scope (empty to omit)
+    required: false
+    default: ""
   clear-aws-credentials:
     description: >
       Also clear the AWS credentials exported by the role assumption from
@@ -76,7 +80,7 @@ runs:
       id: validate
       shell: bash
       env:
-        PERMISSIONS: ${{ inputs.permission-contents }}${{ inputs.permission-pull-requests }}${{ inputs.permission-workflows }}${{ inputs.permission-actions }}${{ inputs.permission-issues }}
+        PERMISSIONS: ${{ inputs.permission-contents }}${{ inputs.permission-pull-requests }}${{ inputs.permission-workflows }}${{ inputs.permission-actions }}${{ inputs.permission-issues }}${{ inputs.permission-dependabot-secrets }}
         REPOSITORIES: ${{ inputs.repositories }}
       run: |
         if [ -z "$PERMISSIONS" ]; then
@@ -118,6 +122,7 @@ runs:
         permission-workflows: ${{ inputs.permission-workflows }}
         permission-actions: ${{ inputs.permission-actions }}
         permission-issues: ${{ inputs.permission-issues }}
+        permission-dependabot-secrets: ${{ inputs.permission-dependabot-secrets }}
 
     - name: Clear releaser PEM
       if: always() && inputs.clear-pem == 'true'

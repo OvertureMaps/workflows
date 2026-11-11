@@ -87,6 +87,7 @@ A floating `@vN` tag is possible only with branch protection and release-only re
 | `permission-workflows` | _(omitted)_ | Permission level for `workflows` |
 | `permission-actions` | _(omitted)_ | Permission level for `actions` |
 | `permission-issues` | _(omitted)_ | Permission level for `issues` |
+| `permission-dependabot-secrets` | _(omitted)_ | Permission level for `dependabot_secrets` |
 | `clear-aws-credentials` | `false` | Also clear `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` and `AWS_SESSION_TOKEN` (runs on failure too) |
 
 Pass `permission-contents: ""` to omit the `contents` scope, but set at least one other `permission-*` input: the action fails if none is set, because an empty set would grant the token every permission of the app installation.
