@@ -1,0 +1,44 @@
+---
+# Cuts an immutable semver tag and GitHub release on every merge to main so
+# Dependabot can propose version bumps to consumers of this repo's actions.
+# Next version is derived from conventional commits by semantic-release
+# (see .github/release/releaserc.json; chore/ci/build/refactor also cut a
+# patch so Dependabot pin bumps are released).
+name: Release
+
+on:
+  push:
+    branches: [main]
+
+permissions: {}
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Tag and release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # create tag and release
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Setup Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+
+      - name: Install release tooling
+        working-directory: .github/release
+        run: npm ci --ignore-scripts
+
+      - name: Semantic release
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: .github/release/node_modules/.bin/semantic-release --extends ./.github/release/releaserc.json

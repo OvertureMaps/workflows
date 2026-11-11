@@ -1,0 +1,135 @@
+name: Releaser app token
+description: >
+  Mints a short-lived GitHub App installation token. Defaults target the
+  overture-releaser app; override inputs to use any app. Assumes an IAM role via OIDC, fetches the
+  app PEM from AWS Secrets Manager, creates the token with actions/create-github-app-token, then clears
+  the PEM from $GITHUB_ENV. Callers need `id-token: write` and `contents: read`.
+
+inputs:
+  permission-contents:
+    description: Permission level requested for the token's `contents` scope
+    required: false
+    default: write
+  permission-pull-requests:
+    description: Permission level for the token's `pull-requests` scope (empty to omit)
+    required: false
+    default: ""
+  permission-workflows:
+    description: Permission level for the token's `workflows` scope (empty to omit)
+    required: false
+    default: ""
+  permission-actions:
+    description: Permission level for the token's `actions` scope (empty to omit)
+    required: false
+    default: ""
+  permission-issues:
+    description: Permission level for the token's `issues` scope (empty to omit)
+    required: false
+    default: ""
+  clear-aws-credentials:
+    description: >
+      Also clear the AWS credentials exported by the role assumption from
+      $GITHUB_ENV, including when the token step fails. Set to "true" when later
+      steps run third-party code that should not hold them.
+    required: false
+    default: "false"
+  clear-pem:
+    description: >
+      Clear APP_PEM from $GITHUB_ENV after the token step, including
+      when it fails. Set to "false" to leave it untouched.
+    required: false
+    default: "true"
+  role-to-assume:
+    description: IAM role ARN allowed to read the PEM secret
+    required: false
+    default: arn:aws:iam::816069134238:role/gha-releaser-secrets-reader
+  secret-id:
+    description: Secrets Manager secret id holding the app PEM
+    required: false
+    default: omf-github-terraform/releaser/pem
+  client-id:
+    description: Client ID of the GitHub App (not sensitive); default is overture-releaser
+    required: false
+    default: Iv23lijru2e660v1zJQO
+  aws-region:
+    description: AWS region of the Secrets Manager secret
+    required: false
+    default: us-west-2
+  owner:
+    description: Owner of the installation to scope the token to (default is the current repository owner)
+    required: false
+    default: ""
+  repositories:
+    description: Comma or newline-separated repositories to scope the token to (default is the current repository, even when `owner` is set)
+    required: false
+    default: ""
+
+outputs:
+  token:
+    description: GitHub App installation token
+    value: ${{ steps.app-token.outputs.token }}
+
+runs:
+  using: composite
+  steps:
+    - name: Validate inputs
+      id: validate
+      shell: bash
+      env:
+        PERMISSIONS: ${{ inputs.permission-contents }}${{ inputs.permission-pull-requests }}${{ inputs.permission-workflows }}${{ inputs.permission-actions }}${{ inputs.permission-issues }}
+        REPOSITORIES: ${{ inputs.repositories }}
+      run: |
+        if [ -z "$PERMISSIONS" ]; then
+          echo "::error::Set at least one permission-* input; an empty set would grant the token every permission of the app installation."
+          exit 1
+        fi
+        repos=$(tr -s ',[:space:]' '\n' <<< "$REPOSITORIES" | sed '/^$/d' | paste -sd, -)
+        if [ -z "$repos" ]; then
+          if [ -n "${REPOSITORIES//[[:space:]]/}" ]; then
+            echo "::error::The repositories input contains no repository names; an empty list would grant access to every repository in the installation."
+            exit 1
+          fi
+          repos="${GITHUB_REPOSITORY#*/}"
+        fi
+        echo "repositories=$repos" >> "$GITHUB_OUTPUT"
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+      with:
+        aws-region: ${{ inputs.aws-region }}
+        role-to-assume: ${{ inputs.role-to-assume }}
+        role-session-name: GitHubActions_${{ github.job }}_${{ github.run_id }}
+
+    - name: Fetch releaser PEM from Secrets Manager
+      uses: aws-actions/aws-secretsmanager-get-secrets@2297f9a879480a9e3af9b293ed15c70caf8e1c88 # v3.0.2
+      with:
+        secret-ids: |
+          APP_PEM, ${{ inputs.secret-id }}
+
+    - name: Generate app token
+      id: app-token
+      uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+      with:
+        client-id: ${{ inputs.client-id }}
+        private-key: ${{ env.APP_PEM }} # zizmor: ignore[secrets-outside-env]
+        owner: ${{ inputs.owner }}
+        repositories: ${{ steps.validate.outputs.repositories }}
+        permission-contents: ${{ inputs.permission-contents }}
+        permission-pull-requests: ${{ inputs.permission-pull-requests }}
+        permission-workflows: ${{ inputs.permission-workflows }}
+        permission-actions: ${{ inputs.permission-actions }}
+        permission-issues: ${{ inputs.permission-issues }}
+
+    - name: Clear releaser PEM
+      if: always() && inputs.clear-pem == 'true'
+      shell: bash
+      run: echo "APP_PEM=" >> "$GITHUB_ENV"
+
+    - name: Clear AWS credentials
+      if: always() && inputs.clear-aws-credentials == 'true'
+      shell: bash
+      run: |
+        {
+          echo "AWS_ACCESS_KEY_ID="
+          echo "AWS_SECRET_ACCESS_KEY="
+          echo "AWS_SESSION_TOKEN="
+        } >> "$GITHUB_ENV"

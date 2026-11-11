@@ -2,6 +2,24 @@
 version: 2
 updates:
 
+  # Maintain release tooling (semantic-release and plugins)
+  - package-ecosystem: "npm"
+    directory: "/.github/release"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    groups:
+      release-tooling:
+        patterns:
+          - "*"
+    labels:
+      - "bot"
+    commit-message:
+      prefix: "chore"
+      include: "scope"
+    cooldown:
+      default-days: 7
+
   # Maintain workflow and composite action dependencies
   - package-ecosystem: "github-actions"
     directories:
