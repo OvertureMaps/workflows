@@ -9,9 +9,7 @@
 #
 # See: https://www.conventionalcommits.org/en/v1.0.0/
 #
-# Legacy [TYPE] bracket titles are rejected here. Repos migrating from the
-# legacy format should stay on validate-pr-title.yml (via OMF PR Checks) until
-# they're ready to require Overture PR Checks (v2).
+# Legacy [TYPE] bracket titles are rejected here.
 #
 # workflow_call only, deliberately: this repo's own PRs still use the legacy
 # [TYPE] format, so a direct pull_request_target trigger here would add a
